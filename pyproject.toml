@@ -15,3 +15,5 @@ dependencies = [
 
 [tool.uv]
 managed = true
+[tool.fastapi]
+entrypoint = "main:app"
