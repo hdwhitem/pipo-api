@@ -78,12 +78,14 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
 
         expiracion_timestamp = ahora_timestamp + (minutos * 60)
 
+        aud_value = self.jwt_audience.strip() if self.jwt_audience else "localhost"
+
         payload = {
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier": user_id,
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name": name,
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress": email,
             "iss": self.jwt_issuer,
-            "aud": "self.jwt_audience",
+            "aud": aud_value,
             "exp": expiracion_timestamp
         }
         
