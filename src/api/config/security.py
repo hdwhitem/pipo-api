@@ -17,16 +17,22 @@ def verify_authorize(request: Request) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autorizado (Falta Cookie/Token)")
         
     try:
+        base_audience = repo.jwt_audience.strip() if repo.jwt_audience else "localhost"
         is_development = repo.jwt_audience in ["localhost", "127.0.0.1"]
+
+        allowed_audiences = [
+            base_audience,
+            base_audience.rstrip("/"),
+            base_audience + "/" if not base_audience.endswith("/") else base_audience
+        ]
 
         decoded = jwt.decode(
             token, 
             repo.jwt_key, 
             issuer=repo.jwt_issuer, 
             algorithms=["HS256"],
-            # Si es desarrollo local, ignora el Audience. Si es producción, lo obliga a coincidir.
             options={"verify_aud": not is_development}, 
-            audience=repo.jwt_audience # Se usa si verify_aud es True
+            audience=allowed_audiences
         )
         return decoded
     
