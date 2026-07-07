@@ -5,10 +5,13 @@ description = "API de Países usando FastAPI y Clean Architecture"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "bcrypt>=5.0.0",
     "fastapi-cloud-cli>=0.12.0",
     "fastapi[standard]",
     "motor",
     "pydantic",
+    "pydantic-settings>=2.11.0",
+    "pyjwt>=2.13.0",
     "python-dotenv",
     "rich-toolkit>=0.20.1",
 ]
