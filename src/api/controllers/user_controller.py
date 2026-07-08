@@ -30,7 +30,7 @@ async def log_user_in(login_dto: LoginDto, response: Response, request: Request)
             value=result["token"],
             httponly=True,
             secure=not is_development,
-            samesite="lax",
+            samesite="lax" if is_development else "none",  # 'none' en Cloud para Vercel, 'lax' en Local
             max_age=3600,
             path="/"
         )
