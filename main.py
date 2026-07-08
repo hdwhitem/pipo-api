@@ -10,9 +10,12 @@ from src.api.config.cors_config import configure_cors
 from src.api.config.swagger_config import configure_swagger_security
 from src.infrastructure.di.service_container import infrastructure_container
 
+from src.infrastructure.services.pdf_service import PdfService
+
 # 3. Importar tus controladores
 from src.api.controllers.country_controller import router as country_router
 from src.api.controllers.user_controller import router as user_router
+from src.api.controllers.pdf_controller import router as pdf_router
 
 # 4. Inicializar la aplicación FastAPI
 app = FastAPI(
@@ -25,6 +28,9 @@ configure_cors(app)
 configure_swagger_security(app)
 infrastructure_container(app)
 
+app.state.pdf_service = PdfService()
+
 # Registrar controladores
 app.include_router(country_router)
 app.include_router(user_router)
+app.include_router(pdf_router)
