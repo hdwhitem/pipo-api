@@ -31,6 +31,8 @@ dnspython==2.7.0
     # via
     #   email-validator
     #   pymongo
+docopt==0.6.2
+    # via num2words
 email-validator==2.3.0
     # via
     #   fastapi
@@ -77,6 +79,8 @@ markupsafe==3.0.3
 mdurl==0.1.2
     # via markdown-it-py
 motor==3.7.1
+    # via pipo-api (pyproject.toml)
+num2words==0.5.14
     # via pipo-api (pyproject.toml)
 pillow==11.3.0
     # via
