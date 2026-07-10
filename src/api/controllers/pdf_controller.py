@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from src.domain.collections.gorder import GOrder
 from src.domain.models.order import Order
 from src.application.interfaces.imongo_repo import IMongoRepo
+from src.api.config.security import verify_authorize
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -25,7 +26,8 @@ def get_pdf_service(request: Request):
 async def proforma_invoice(
     parameters: GOrder,
     request: Request,
-    pdf_service = Depends(get_pdf_service)
+    pdf_service = Depends(get_pdf_service),
+    user_session: dict = Depends(verify_authorize)
 ) -> Response:
     if parameters is None:
         raise HTTPException(
