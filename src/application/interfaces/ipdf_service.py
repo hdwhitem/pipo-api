@@ -1,9 +1,16 @@
 from abc import ABC, abstractmethod
-from src.domain.dtos.pdf_report_dto import SimpleReportDto
+from src.domain.models.order import Order
+
 
 class IPdfService(ABC):
-    
+    """Interfaz abstracta para el servicio de generación de PDFs."""
+
     @abstractmethod
-    def generate_sample_report(self, data: SimpleReportDto) -> bytes:
-        """Genera un reporte PDF simple en memoria y retorna sus bytes."""
+    async def generate_proforma_a(self, order: Order) -> bytes:
+        """Genera el PDF para la Proforma Tipo A (Estándar)."""
+        pass
+
+    @abstractmethod
+    async def generate_proforma_cs(self, order: Order) -> bytes:
+        """Genera el PDF para la Proforma Tipo CS (Slabs / Detallada)."""
         pass

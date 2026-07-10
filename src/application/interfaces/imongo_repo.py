@@ -1,8 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from src.domain.collections.gbank_account import GBankAccount
+from src.domain.collections.gconsignee import GConsignee
 from src.domain.collections.gcountry import Gcountry
+from src.domain.collections.gexporter import GExporter
+from src.domain.collections.gmanufacturer import GManufacturer
+from src.domain.collections.gsupplier import GSupplier
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
+from src.domain.collections.gorder import GOrder
 
 class IMongoRepo(ABC):
     
@@ -20,3 +26,44 @@ class IMongoRepo(ABC):
     async def login_user_async(self, dto: LoginDto) -> Dict[str, Any]:
         """Contrato para el login de un usuario"""
         pass
+
+    @abstractmethod
+    async def get_proforma_number(self) -> int:
+        """Contrato para obtener el numero de la proforma"""
+        pass
+
+    @abstractmethod
+    async def save_order(self, order: GOrder) -> GOrder:
+        """Contrato para guardar la orden"""
+        pass
+
+    @abstractmethod
+    async def update_pi_number(self, pi: int) -> int:
+        """Contrato para actualizar el numero de la proforma"""
+        pass
+
+    @abstractmethod
+    async def get_consignee_by_id(self, consignee_id: str) -> Optional[GConsignee]:
+        """Contrato para obtener consignee por id"""
+        pass
+
+    @abstractmethod
+    async def get_supplier_by_id(self, supplier_id: str) -> Optional[GSupplier]:
+        """Contrato para obtener supplier por id"""
+        pass
+
+    @abstractmethod
+    async def get_exporter_by_id(self, exporter_id: str) -> Optional[GExporter]:
+        """Contrato para obtener exporter por id"""
+        pass
+    
+    @abstractmethod
+    async def get_manufacturer_by_id(self, manufacturer_id: str) -> Optional[GManufacturer]:
+        """Contrato para obtener manufacturer por id"""
+        pass
+
+    @abstractmethod
+    async def get_bank_account_by_id(self, bank_account_id: str) -> Optional[GBankAccount]:
+        """Contrato para obtener bank account por id"""
+        pass
+

@@ -10,7 +10,7 @@ from src.api.config.cors_config import configure_cors
 from src.api.config.swagger_config import configure_swagger_security
 from src.infrastructure.di.service_container import infrastructure_container
 
-from src.infrastructure.services.pdf_service import PdfService
+from src.infrastructure.services.pdf.pdf_service_impl import PdfService
 
 # 3. Importar tus controladores
 from src.api.controllers.country_controller import router as country_router

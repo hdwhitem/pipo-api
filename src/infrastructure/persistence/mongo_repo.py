@@ -2,12 +2,20 @@ import os
 import jwt
 import bcrypt
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.application.interfaces.imongo_repo import IMongoRepo
+from src.domain.collections.gbank_account import GBankAccount
 from src.domain.collections.gcountry import Gcountry
+from src.domain.collections.gexporter import GExporter
+from src.domain.collections.gmanufacturer import GManufacturer
+from src.domain.collections.gsupplier import GSupplier
 from src.domain.collections.guser import Guser
+from src.domain.collections.gproforma_number import GProformaNumber
+from src.domain.collections.gorder import GOrder
+from src.domain.collections.gconsignee import GConsignee
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
 
@@ -17,6 +25,14 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
         self.db = self.client["Shop"]
         self.country_collection = self.db["Gcountry"]
         self.user_collection = self.db["Guser"]
+        self._proforma = self.db["GProformaNumber"]
+        self._order = self.db["GOrder"]
+        self._consignee = self.db["Gconsignee"]
+        self._supplier = self.db["Gsupplier"]
+        self._exporter = self.db["Gexporter"]
+        self._manufacturer = self.db["Gmanufacturer"]
+        self._bank = self.db["GbankAccount"]
+
 
         # Configuración JWT
         self.jwt_key = os.getenv("JWT_KEY")
@@ -88,5 +104,138 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
             "aud": aud_value,
             "exp": expiracion_timestamp
         }
-        
+
         return jwt.encode(payload, self.jwt_key, algorithm="HS256")
+    
+    
+    async def get_proforma_number(self) -> int:
+        pipeline = [
+            {
+                "$group": {
+                    "_id": None,
+                    "CurrentProforma": {"$max": "$Count"}
+                }
+            }
+        ]
+
+        cursor = self._proforma.aggregate(pipeline)
+        result_list = await cursor.to_list(length=1)
+
+        if result_list and "CurrentProforma" in result_list[0] and result_list[0]["CurrentProforma"] is not None:
+            current_proforma = result_list[0]["CurrentProforma"]
+            new_count = int(current_proforma) + 1
+
+            new_proforma = GProformaNumber(
+                count=new_count,
+                created_date=datetime.now(timezone.utc)
+            )
+            
+            await self._proforma.insert_one(
+                new_proforma.model_dump(by_alias=True, exclude_none=True)
+            )
+            return new_count
+        else:
+            new_count = 198
+            new_proforma = GProformaNumber(
+                count=new_count,
+                created_date=datetime.now(timezone.utc)
+            )
+            
+            await self._proforma.insert_one(
+                new_proforma.model_dump(by_alias=True, exclude_none=True)
+            )
+            print(f"No result found. New proforma: {new_proforma.count}")
+            return new_count
+        
+    async def save_order(self, order: GOrder) -> GOrder:
+        existing_order = await self._order.find_one({"pi_number": order.pi_number})
+
+        if existing_order is None:
+            order_data = order.model_dump(by_alias=True, exclude_none=True)
+            result = await self._order.insert_one(order_data)
+
+            order.id = str(result.inserted_id)
+
+        return order
+    
+    async def update_pi_number(self, pi: int) -> int:
+        # Busca si ya existe un documento con ese 'count'
+        get_proforma = await self._proforma.find_one({"count": pi})
+        now_utc = datetime.now(timezone.utc)
+
+        if get_proforma is None:
+            # Caso Insert: si no existe, creamos el nuevo registro
+            new_proforma = GProformaNumber(
+                count=pi,
+                created_date=now_utc
+            )
+            await self._proforma.insert_one(
+                new_proforma.model_dump(by_alias=True, exclude_none=True)
+            )
+            return pi
+        else:
+            # Caso Update: actualizamos la fecha del documento existente
+            doc_id = get_proforma["_id"]
+            
+            result = await self._proforma.update_one(
+                {"_id": doc_id},
+                {"$set": {"created_date": now_utc}}
+            )
+
+            # Si se modificó el documento (o si ya tenía exactamente ese valor)
+            if result.modified_count > 0 or result.matched_count > 0:
+                return pi
+                
+            return 0
+        
+    async def get_consignee_by_id(self, consignee_id: str) -> Optional[GConsignee]:
+        
+        if ObjectId.is_valid(consignee_id):
+            
+            doc = await self._consignee.find_one({"_id": ObjectId(consignee_id)})
+            
+            if doc:
+                return GConsignee(**doc)
+
+        return None
+    
+    async def get_supplier_by_id(self, supplier_id: str) -> Optional[GSupplier]:
+        doc = await self._supplier.find_one({"SupplierId": supplier_id})
+        
+        if doc:
+            return GSupplier(**doc)
+            
+        return None
+    
+    async def get_exporter_by_id(self, exporter_id: str) -> Optional[GExporter]:
+        # Valida que el string sea un ObjectId de Mongo válido (reemplaza a rg.IsMatch)
+        if ObjectId.is_valid(exporter_id):
+            doc = await self._exporter.find_one({"_id": ObjectId(exporter_id)})
+            
+            if doc:
+                # Instancia y retorna el modelo Pydantic
+                return GExporter(**doc)
+
+        return None
+    
+    async def get_manufacturer_by_id(self, manufacturer_id: str) -> Optional[GManufacturer]:
+        # Valida que sea un ObjectId de MongoDB válido (reemplaza a rg.IsMatch)
+        if ObjectId.is_valid(manufacturer_id):
+            doc = await self._manufacturer.find_one({"_id": ObjectId(manufacturer_id)})
+            
+            if doc:
+                # Convierte el diccionario retornado por Mongo al objeto Pydantic GManufacturer
+                return GManufacturer(**doc)
+
+        return None
+    
+    async def get_bank_account_by_id(self, bank_account_id: str) -> Optional[GBankAccount]:
+        # Valida si la cadena es un ObjectId de MongoDB válido (reemplaza a rg.IsMatch)
+        if ObjectId.is_valid(bank_account_id):
+            doc = await self._bank.find_one({"_id": ObjectId(bank_account_id)})
+            
+            if doc:
+                # Instancia y mapea el diccionario de Mongo al objeto Pydantic GBankAccount
+                return GBankAccount(**doc)
+
+        return None
