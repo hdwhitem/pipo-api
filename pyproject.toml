@@ -10,10 +10,12 @@ dependencies = [
     "fastapi[standard]",
     "fpdf2>=2.8.4",
     "motor",
+    "pillow>=11.3.0",
     "pydantic",
     "pydantic-settings>=2.11.0",
     "pyjwt>=2.13.0",
     "python-dotenv",
+    "reportlab>=5.0.0",
     "rich-toolkit>=0.20.1",
 ]
 
