@@ -33,14 +33,14 @@ class NumberedCanvas(canvas.Canvas):
         page_width = 595.27
         y = 12
 
-        # 1. Izquierda: Mensaje legal / Aviso
-        self.drawString(14, y, "THIS PROFORMA IS NOT VALID FOR PAYMENT PURPOSES")
-
-        # 2. Centro: Fecha y hora de generación
+        # 1. Izquierda
         date_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        self.drawCentredString(page_width / 2.0, y, f"Generated on: {date_str}")
+        self.drawString(14, y, f"Generated on: {date_str}")
 
-        # 3. Derecha: Paginación dinamicamente calculada
+        # 2. Centro
+        self.drawCentredString(page_width / 2.0, y, "THIS PROFORMA IS NOT VALID FOR PAYMENT PURPOSES")
+
+        # 3. Derecha
         page_text = f"Page {self._pageNumber} of {page_count}"
         self.drawRightString(page_width - 14, y, page_text)
 

@@ -32,9 +32,8 @@ def build_header_component(order, logo_stream: Optional[BytesIO]):
         'Val', parent=styles['Normal'],
         fontName='Helvetica', fontSize=8, alignment=1, leading=10
     )
-    
     s_val_ce = ParagraphStyle(
-        'Val', parent=styles['Normal'],
+        'ValCE', parent=styles['Normal'],
         fontName='Helvetica', fontSize=8, alignment=1, leading=12
     )
 
@@ -94,7 +93,15 @@ def build_header_component(order, logo_stream: Optional[BytesIO]):
 
     terms_text = f"{order.incoterms.upper()} - {order.terms_and_payment.upper()}"
 
-    # ── Tabla unificada: 4 columnas × 9 filas ─────────────
+    # ── Tabla unificada: 4 columnas × 8 filas ─────────────
+    #  Row 0: PI NO / CONSIGNEE / EXPORTER / LOGO
+    #  Row 1: valor / consignee addr (span) / exporter addr (span) / (logo span)
+    #  Row 2: DATE / ... / ... / (logo span)
+    #  Row 3: fecha / ... / ... / (logo span fin)
+    #  Row 4: DUE DATE / ... / ... / FINAL DESTINATION
+    #  Row 5: fecha  / ... / ... / destino valor
+    #  Row 6: ORIGIN / TERMS / PORT LOADING / PORT DISCHARGE  (labels)
+    #  Row 7: valor  / valor  / valor       / valor           (values)
     data = [
         # Row 0
         [
@@ -108,59 +115,65 @@ def build_header_component(order, logo_stream: Optional[BytesIO]):
             Paragraph(str(order.pi_number), s_val_lg),
             Paragraph(consignee_block, s_val_ce),
             Paragraph(exporter_block, s_val_ce),
-            "",
+            "",   # dentro del SPAN del logo (3,0)-(3,3)
         ],
         # Row 2
-        [Paragraph("DATE", s_lbl), "", "", ""],
+        [
+            Paragraph("DATE", s_lbl),
+            "",   # dentro del SPAN consignee (1,1)-(1,5)
+            "",   # dentro del SPAN exporter  (2,1)-(2,5)
+            "",   # dentro del SPAN logo     (3,0)-(3,3)
+        ],
         # Row 3
-        [Paragraph(today_str, s_val), "", "", ""],
+        [
+            Paragraph(today_str, s_val),
+            "",
+            "",
+            "",
+        ],
         # Row 4
-        
-        # Row 5
         [
             Paragraph("DUE DATE", s_lbl),
-            "",
-            "",
+            "",   # dentro del SPAN consignee (1,1)-(1,5)
+            "",   # dentro del SPAN exporter  (2,1)-(2,5)
             Paragraph("FINAL DESTINATION", s_lbl),
         ],
-        # Row 6
+        # Row 5
         [
             Paragraph(due_str, s_val),
-            "",
-            "",
-            Paragraph(order.country_destination.upper(), s_val), # Valor destino
+            "",   # dentro del SPAN consignee (1,1)-(1,5)
+            "",   # dentro del SPAN exporter  (2,1)-(2,5)
+            Paragraph(order.country_destination.upper(), s_val),
         ],
-        # Row 7 (Corregido índice de comentarios)
+        # Row 6 — labels
         [
             Paragraph("ORIGIN OF GOODS", s_lbl),
             Paragraph("TERMS OF DELIVERY & PAYMENT", s_lbl),
             Paragraph("PORT OF LOADING", s_lbl),
             Paragraph("PORT OF DISCHARGE", s_lbl),
         ],
-        # Row 8 - Corregido para mapear correctamente las columnas de la tabla
+        # Row 7 — values
         [
             Paragraph("INDIA", s_val),
-            Paragraph(terms_text, s_val),                          # Términos en Col 1
-            Paragraph("MUNDRA, INDIA", s_val),                     # Port of Loading en Col 2
-            Paragraph(order.port_of_discharge.upper(), s_val),     # Port of Discharge en Col 3
+            Paragraph(terms_text, s_val),
+            Paragraph("MUNDRA, INDIA", s_val),
+            Paragraph(order.port_of_discharge.upper(), s_val),
         ],
     ]
 
     tbl = Table(data, colWidths=[c1w, c2w, c3w, c4w])
     tbl.setStyle(TableStyle([
         # ── SPANs ──
-        ('SPAN', (1, 1), (1, 5)),    # Consignee: filas 1 a 6
-        ('SPAN', (2, 1), (2, 5)),    # Exporter: filas 1 a 6
-        ('SPAN', (3, 0), (3, 3)),    # Logo: filas 0 a 4
-        ('SPAN', (0, 6), (0, 6)),    # INDIA ocupa fila 7 y 8 en col 0
-       
+        ('SPAN', (1, 1), (1, 5)),    # Consignee: rows 1-5
+        ('SPAN', (2, 1), (2, 5)),    # Exporter:  rows 1-5
+        ('SPAN', (3, 0), (3, 3)),    # Logo:     rows 0-3
 
-        # ── Fondos grises ──
+        # ── Fondos grises (solo labels) ──
         ('BACKGROUND', (0, 0), (2, 0), grey),    # PI NO, CONSIGNEE, EXPORTER
         ('BACKGROUND', (0, 2), (0, 2), grey),    # DATE
         ('BACKGROUND', (0, 4), (0, 4), grey),    # DUE DATE
         ('BACKGROUND', (3, 4), (3, 4), grey),    # FINAL DESTINATION
-        ('BACKGROUND', (0, 6), (3, 6), grey),    # TERMS, PORT LOADING, DISCHARGE labels
+        ('BACKGROUND', (0, 6), (3, 6), grey),    # ORIGIN, TERMS, PORT LOADING, PORT DISCHARGE
 
         # ── Grid unificado ──
         ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),

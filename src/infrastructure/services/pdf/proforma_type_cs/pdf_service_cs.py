@@ -30,7 +30,7 @@ class ProformaTypeCSBuilder:
         # 1. Carga Asíncrona de Imágenes
         async with httpx.AsyncClient() as client:
             logo_stream = await fetch_image_bytes(client, order.supplier.logo)
-            sign_stream = await fetch_image_bytes(client, getattr(order, 'sign_url', ''))
+            sign_stream = await fetch_image_bytes(client, order.exporter.sign)
             
             slab_images: Dict[str, BytesIO] = {}
             for slab in order.slabs:
