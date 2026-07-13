@@ -1,4 +1,3 @@
-# src/infrastructure/services/pdf/proforma_type_b/components/table_content.py
 from io import BytesIO
 from typing import List, Dict, Optional
 from reportlab.platypus import Table, TableStyle, Image, Paragraph, Spacer

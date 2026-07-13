@@ -1,4 +1,3 @@
-# src/infrastructure/services/pdf/proforma_type_b/components/header.py
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import Optional
@@ -9,25 +8,42 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 def build_header_component(order, logo_stream: Optional[BytesIO]):
     styles = getSampleStyleSheet()
+    grey = colors.HexColor("#E0E0E0")
 
-    title_style = ParagraphStyle(
-        'HeaderTitle', parent=styles['Normal'],
+    # ── Styles ──────────────────────────────────────────────
+    s_title = ParagraphStyle(
+        'Title', parent=styles['Normal'],
         fontName='Helvetica-Bold', fontSize=10,
         textColor=colors.white, alignment=1
     )
-    lbl_style = ParagraphStyle(
-        'HeaderLabel', parent=styles['Normal'],
-        fontName='Helvetica-Bold', fontSize=8, alignment=1
+    s_lbl_lg = ParagraphStyle(
+        'LblLg', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=10, alignment=1, leading=11
     )
-    val_style = ParagraphStyle(
-        'HeaderValue', parent=styles['Normal'],
-        fontName='Helvetica', fontSize=8, alignment=1, leading=9
+    s_lbl = ParagraphStyle(
+        'Lbl', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=8, alignment=1, leading=9
+    )
+    s_val_lg = ParagraphStyle(
+        'ValLg', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=10, alignment=1, leading=11
+    )
+    s_val = ParagraphStyle(
+        'Val', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=8, alignment=1, leading=10
+    )
+    
+    s_val_ce = ParagraphStyle(
+        'Val', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=8, alignment=1, leading=12
     )
 
-    # Banner del Título
-    title_data = [[Paragraph("PROFORMA INVOICE", title_style)]]
-    title_table = Table(title_data, colWidths=[567])
-    title_table.setStyle(TableStyle([
+    # ── Title Banner ────────────────────────────────────────
+    title_tbl = Table(
+        [[Paragraph("PROFORMA INVOICE", s_title)]],
+        colWidths=[567]
+    )
+    title_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -36,63 +52,128 @@ def build_header_component(order, logo_stream: Optional[BytesIO]):
         ('BOX', (0, 0), (-1, -1), 0.3, colors.black),
     ]))
 
-    # Carga de Fechas y Datos Truncados
+    # ── Data ────────────────────────────────────────────────
     today_str = datetime.today().strftime("%d/%m/%Y")
-    due_date_str = (datetime.today() + timedelta(days=10)).strftime("%d/%m/%Y")
+    due_str = (datetime.today() + timedelta(days=10)).strftime("%d/%m/%Y")
 
-    c_name = order.consignee.name[:45].upper() if len(order.consignee.name) > 45 else order.consignee.name.upper()
-    c_addr = order.consignee.address[:40].upper() if len(order.consignee.address) > 40 else order.consignee.address.upper()
+    c_name = (
+        order.consignee.name[:45]
+        if len(order.consignee.name) > 45
+        else order.consignee.name
+    ).upper()
+    c_addr = (
+        order.consignee.address[:40]
+        if len(order.consignee.address) > 40
+        else order.consignee.address
+    ).upper()
 
-    logo_img = Image(logo_stream, width=120, height=40) if logo_stream else Paragraph("", val_style)
+    logo = (
+        Image(logo_stream, width=118, height=60)
+        if logo_stream
+        else Paragraph("", s_val)
+    )
 
-    # Columnas de Información
-    col1_content = [
-        [Paragraph("PI NO.", lbl_style)], [Paragraph(str(order.pi_number), val_style)],
-        [Paragraph("DATE", lbl_style)], [Paragraph(today_str, val_style)],
-        [Paragraph("DUE DATE", lbl_style)], [Paragraph(due_date_str, val_style)],
-        [Paragraph("ORIGIN OF GOODS", lbl_style)], [Paragraph("INDIA", val_style)]
+    consignee_block = (
+        f"{c_name}<br/>"
+        f"{c_addr}<br/>"
+        f"{order.consignee.city}, {order.consignee.country.upper()}<br/>"
+        f"POST CODE: {order.consignee.post_code}<br/>"
+        f"TAX ID: {order.consignee.tax_id}<br/>"
+        f"PH: {order.consignee.phone}"
+    )
+    exporter_block = (
+        f"{order.exporter.name}<br/>"
+        f"{order.exporter.address}<br/>"
+        f"{order.exporter.city}<br/>"
+        f"POST CODE: {order.exporter.post_code}<br/>"
+        f"TAX ID: {order.exporter.tax_id}<br/>"
+        f"PH: {order.exporter.phone}"
+    )
+
+    c1w, c2w, c3w, c4w = 79, 213, 155, 120
+
+    terms_text = f"{order.incoterms.upper()} - {order.terms_and_payment.upper()}"
+
+    # ── Tabla unificada: 4 columnas × 9 filas ─────────────
+    data = [
+        # Row 0
+        [
+            Paragraph("PI NO.", s_lbl_lg),
+            Paragraph("CONSIGNEE", s_lbl_lg),
+            Paragraph("EXPORTER", s_lbl_lg),
+            logo,
+        ],
+        # Row 1
+        [
+            Paragraph(str(order.pi_number), s_val_lg),
+            Paragraph(consignee_block, s_val_ce),
+            Paragraph(exporter_block, s_val_ce),
+            "",
+        ],
+        # Row 2
+        [Paragraph("DATE", s_lbl), "", "", ""],
+        # Row 3
+        [Paragraph(today_str, s_val), "", "", ""],
+        # Row 4
+        
+        # Row 5
+        [
+            Paragraph("DUE DATE", s_lbl),
+            "",
+            "",
+            Paragraph("FINAL DESTINATION", s_lbl),
+        ],
+        # Row 6
+        [
+            Paragraph(due_str, s_val),
+            "",
+            "",
+            Paragraph(order.country_destination.upper(), s_val), # Valor destino
+        ],
+        # Row 7 (Corregido índice de comentarios)
+        [
+            Paragraph("ORIGIN OF GOODS", s_lbl),
+            Paragraph("TERMS OF DELIVERY & PAYMENT", s_lbl),
+            Paragraph("PORT OF LOADING", s_lbl),
+            Paragraph("PORT OF DISCHARGE", s_lbl),
+        ],
+        # Row 8 - Corregido para mapear correctamente las columnas de la tabla
+        [
+            Paragraph("INDIA", s_val),
+            Paragraph(terms_text, s_val),                          # Términos en Col 1
+            Paragraph("MUNDRA, INDIA", s_val),                     # Port of Loading en Col 2
+            Paragraph(order.port_of_discharge.upper(), s_val),     # Port of Discharge en Col 3
+        ],
     ]
-    col2_content = [
-        [Paragraph("CONSIGNEE", lbl_style)],
-        [Paragraph(f"{c_name}<br/>{c_addr}<br/>{order.consignee.city}, {order.consignee.country.upper()}<br/>POST CODE: {order.consignee.post_code}<br/>TAX ID: {order.consignee.tax_id}<br/>PH: {order.consignee.phone}", val_style)],
-        [Paragraph("TERMS OF DELIVERY & PAYMENT", lbl_style)],
-        [Paragraph(f"{order.incoterms.upper()} {order.terms_and_payment.upper()}", val_style)]
-    ]
-    col3_content = [
-        [Paragraph("EXPORTER", lbl_style)],
-        [Paragraph(f"{order.exporter.name}<br/>{order.exporter.address}<br/>{order.exporter.city}<br/>POST CODE: {order.exporter.post_code}<br/>TAX ID: {order.exporter.tax_id}<br/>PH: {order.exporter.phone}", val_style)],
-        [Paragraph("PORT OF LOADING", lbl_style)],
-        [Paragraph("MUNDRA, INDIA", val_style)]
-    ]
-    col4_content = [
-        [logo_img],
-        [Paragraph("FINAL DESTINATION", lbl_style)], [Paragraph(order.country_destination.upper(), val_style)],
-        [Paragraph("PORT OF DISCHARGE", lbl_style)], [Paragraph(order.port_of_discharge.upper(), val_style)]
-    ]
 
-    t1 = Table(col1_content, colWidths=[80])
-    t2 = Table(col2_content, colWidths=[160])
-    t3 = Table(col3_content, colWidths=[150])
-    t4 = Table(col4_content, colWidths=[177])
+    tbl = Table(data, colWidths=[c1w, c2w, c3w, c4w])
+    tbl.setStyle(TableStyle([
+        # ── SPANs ──
+        ('SPAN', (1, 1), (1, 5)),    # Consignee: filas 1 a 6
+        ('SPAN', (2, 1), (2, 5)),    # Exporter: filas 1 a 6
+        ('SPAN', (3, 0), (3, 3)),    # Logo: filas 0 a 4
+        ('SPAN', (0, 6), (0, 6)),    # INDIA ocupa fila 7 y 8 en col 0
+       
 
-    for t in [t1, t2, t3, t4]:
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E0E0E0")),
-            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor("#E0E0E0")),
-            ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-        ]))
+        # ── Fondos grises ──
+        ('BACKGROUND', (0, 0), (2, 0), grey),    # PI NO, CONSIGNEE, EXPORTER
+        ('BACKGROUND', (0, 2), (0, 2), grey),    # DATE
+        ('BACKGROUND', (0, 4), (0, 4), grey),    # DUE DATE
+        ('BACKGROUND', (3, 4), (3, 4), grey),    # FINAL DESTINATION
+        ('BACKGROUND', (0, 6), (3, 6), grey),    # TERMS, PORT LOADING, DISCHARGE labels
 
-    grid_table = Table([[t1, t2, t3, t4]], colWidths=[80, 160, 150, 177])
-    grid_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        # ── Grid unificado ──
+        ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+
+        # ── Alineación ──
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # ── Padding ──
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
     ]))
 
-    return [title_table, grid_table]
+    return [title_tbl, tbl]
