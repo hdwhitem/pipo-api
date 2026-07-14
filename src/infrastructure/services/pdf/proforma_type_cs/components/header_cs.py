@@ -1,179 +1,210 @@
-# src/infrastructure/services/pdf/components/header.py
+# src/infrastructure/services/pdf/proforma_type_a/components/header_cs.py
+"""
+Header component matching .NET 8 QuestPDF HeaderContentCS exactly.
+
+.NET layout (3 visual rows stacked vertically):
+  Row 1  - Full-width: "PROFORMA INVOICE" (centered, fontSize=10, SemiBold, underlined)
+  Row 2  - Full-width: Logo image (centered, 9 cm wide)
+  Row 3  - Three bordered columns side-by-side (single table, same height):
+              Col 1 (5.5 cm)  EXPORTER  + PORT OF LOADING
+              Col 2 (relative) CONSIGNEE + TERMS OF DELIVERY & PAYMENT
+              Col 3 (5.5 cm)  PI NO / VALID DATE / FINAL DESTINATION / PORT OF DISCHARGE
+
+Labels are SemiBold + Underline, LEFT-aligned (matching .NET default).
+Values are CENTER-aligned (matching .NET .AlignCenter()).
+"""
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import List, Optional
 
 from reportlab.lib import colors
-from reportlab.lib.units import cm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.units import mm, cm
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.platypus import (
+    Table, TableStyle, Paragraph, Image, HRFlowable,
+)
+
+# ── Constants ─────────────────────────────────────────────────────────────
+BORDER_W = 0.3                       # 0.1 mm ≈ 0.28 pt → 0.3 pt
+TOTAL_W  = 567                       # A4 usable width with ~14 mm margins
+COL1_W   = 5.5 * cm                  # Exporter   ≈ 155.9 pt
+COL3_W   = 5.5 * cm                  # PI Info    ≈ 155.9 pt
+COL2_W   = TOTAL_W - COL1_W - COL3_W  # Consignee ≈ 255.2 pt
+
+# ── Paragraph styles ─────────────────────────────────────────────────────
+
+_title_label_lg = ParagraphStyle(
+    "lbl_lg", fontName="Helvetica-Bold", fontSize=10, leading=12,
+    textColor=colors.black, alignment=1,
+)
+_label_lg = ParagraphStyle(
+    "lbl_lg", fontName="Helvetica-Bold", fontSize=10, leading=14,
+    textColor=colors.black, alignment=0,
+)
+_label_md = ParagraphStyle(
+    "lbl_sm", fontName="Helvetica-Bold", fontSize=9, leading=14,
+    textColor=colors.black, alignment=0,
+)
+_label_sm = ParagraphStyle(
+    "lbl_sm", fontName="Helvetica-Bold", fontSize=9, leading=13,
+    textColor=colors.black, alignment=0,
+)
+# Values → CENTER-aligned (matching .NET .AlignCenter() on value items)
+_val_lg = ParagraphStyle(
+    "val_lg", fontName="Helvetica-Bold", fontSize=11, leading=15.5,
+    textColor=colors.black, alignment=1,
+)
+_val_lg2 =ParagraphStyle(
+    "val_md", fontName="Helvetica", fontSize=9, leading=14,
+    textColor=colors.black, alignment=1,
+)
+_val_md = ParagraphStyle(
+    "val_md", fontName="Helvetica", fontSize=9, leading=11,
+    textColor=colors.black, alignment=1,
+)
+_val_sm = ParagraphStyle(
+    "val_sm", fontName="Helvetica", fontSize=8, leading=12,
+    textColor=colors.black, alignment=1,
+)
+_val_xs = ParagraphStyle(
+    "val_sm", fontName="Helvetica", fontSize=8, leading=10,
+    textColor=colors.black, alignment=1,
+)
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+def _sep():
+    """Horizontal rule replicating .NET's .BorderTop(0.1f, Unit.Millimetre)."""
+    return HRFlowable(width="100%", thickness=BORDER_W, color=colors.black)
 
 
+# ══════════════════════════════════════════════════════════════════════════
 def build_header_component(order, logo_stream: Optional[BytesIO]) -> List:
-    elements = []
-    
-    # --- 1. ESTILOS ---
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle(
-        'HeaderTitle',
-        fontName='Helvetica-Bold',
-        fontSize=10,
-        alignment=1, # Center
-        textColor=colors.black
-    )
-    
-    label_style = ParagraphStyle(
-        'HeaderLabel',
-        fontName='Helvetica-Bold',
-        fontSize=8,
-        leading=10
-    )
-    
-    label_lg_style = ParagraphStyle(
-        'HeaderLabelLg',
-        fontName='Helvetica-Bold',
-        fontSize=10,
-        leading=12
-    )
-    
-    val_style = ParagraphStyle(
-        'HeaderValue',
-        fontName='Helvetica',
-        fontSize=8,
-        alignment=1, # Center
-        leading=10
-    )
-    
-    val_bold_style = ParagraphStyle(
-        'HeaderValueBold',
-        fontName='Helvetica-Bold',
-        fontSize=11,
-        alignment=1, # Center
-        leading=13
-    )
+    """
+    Replicate .NET HeaderContentCS.Compose() in ReportLab.
 
-    # --- 2. TÍTULO "PROFORMA INVOICE" ---
-    title_table = Table([[Paragraph("PROFORMA INVOICE", title_style)]], colWidths=['100%'])
-    title_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    Parameters
+    ----------
+    order : Order-like object with .pi_number, .incoterms, .terms_and_payment,
+            .country_destination, .port_of_discharge, .consignee.*, .exporter.*
+    logo_stream : BytesIO  (PNG/JPG bytes for the company logo)
+    """
+
+    # ── Dates ─────────────────────────────────────────────────────────────
+    today    = datetime.today()
+    today_s  = today.strftime("%d/%m/%Y")
+    due_s    = (today + timedelta(days=15)).strftime("%d/%m/%Y")
+
+    # ── Truncate consignee name / address to 50 chars (matching .NET) ────
+    c_name = (order.consignee.name[:50] if len(order.consignee.name) > 50
+              else order.consignee.name).upper()
+    c_addr = (order.consignee.address[:50] if len(order.consignee.address) > 50
+              else order.consignee.address).upper()
+
+    # =====================================================================
+    # ROW 1 - "PROFORMA INVOICE" title
+    # =====================================================================
+    title_tbl = Table(
+        [[Paragraph("<b>PROFORMA INVOICE</b>", _title_label_lg)]],
+        colWidths=[TOTAL_W],
+    )
+    title_tbl.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), BORDER_W, colors.black),
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.white),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
-    elements.append(title_table)
 
-    # --- 3. LOGO ---
-    if logo_stream:
-        # 9cm de ancho como en el C#
-        logo_img = RLImage(logo_stream, width=9 * cm, height=2.5 * cm) 
-        logo_img.hAlign = 'CENTER'
-        logo_content = logo_img
+    # =====================================================================
+    # ROW 2 - Logo (centered, 9 cm wide)
+    # =====================================================================
+    if logo_stream and hasattr(logo_stream, "read"):
+        logo_stream.seek(0)
+        logo_img = Image(logo_stream, width=9 * cm, height=1.5 * cm * 0.45)
     else:
-        logo_content = Paragraph("<b>NO LOGO</b>", val_style)
+        logo_img = Paragraph("", _val_sm)
 
-    logo_table = Table([[logo_content]], colWidths=['100%'])
-    logo_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    logo_tbl = Table(
+        [[logo_img]],
+        colWidths=[TOTAL_W],
+    )
+    logo_tbl.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), BORDER_W, colors.black),
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.white),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
-    elements.append(logo_table)
 
-    # --- 4. PREPARACIÓN DE DATOS DE LAS 3 COLUMNAS ---
-    
-    # Helper rápido para construir las celdas internas limpiamente
-    def p_label(text: str, is_large: bool = False) -> Paragraph:
-        style = label_lg_style if is_large else label_style
-        return Paragraph(f"<u><b>{text}</b></u>", style)
+    # =====================================================================
+    # ROW 3 - Single 3-column table
+    # BOX gives outer border, LINEAFTER gives vertical column separators.
+    # All 3 cells share the same row height → columns end flush together.
+    # =====================================================================
 
-    def p_val(text: str, is_bold: bool = False) -> Paragraph:
-        style = val_bold_style if is_bold else val_style
-        return Paragraph(str(text or ''), style)
-
-    # A. COLUMNA 1: EXPORTER
-    exporter_data = [
-        [p_label("EXPORTER :", is_large=True)],
-        [p_val(order.exporter.name)],
-        [p_val(order.exporter.address)],
-        [p_val(order.exporter.city)],
-        [p_val(f"POST CODE: {order.exporter.post_code}")],
-        [p_val(f"TAX ID: {order.exporter.tax_id}")],
-        [p_val(f"PH: {order.exporter.phone}")],
-        [p_label("PORT OF LOADING :")],
-        [p_val("MUNDRA, INDIA")]
-    ]
-    
-    # B. COLUMNA 2: CONSIGNEE (Con recortes de máximo 50 caracteres)
-    cons_name = (order.consignee.name[:50] if len(order.consignee.name) > 50 else order.consignee.name).upper()
-    cons_addr = (order.consignee.address[:50] if len(order.consignee.address) > 50 else order.consignee.address).upper()
-    
-    consignee_data = [
-        [p_label("CONSIGNEE : ", is_large=True)],
-        [p_val(cons_name)],
-        [p_val(cons_addr)],
-        [p_val(f"{order.consignee.city}, {order.consignee.country.upper()}")],
-        [p_val(f"POST CODE: {order.consignee.post_code}")],
-        [p_val(f"TAX ID: {order.consignee.tax_id}")],
-        [p_val(f"PH: {order.consignee.phone}")],
-        [p_label("TERMS OF DELIVERY & PAYMENT :")],
-        [p_val(f"{order.incoterms.upper()} {order.terms_and_payment.upper()}")]
+    # ── COLUMN 1: EXPORTER (5.5 cm) + PORT OF LOADING ────────────────────
+    exporter_content = [
+        Paragraph("<b><u>EXPORTER :</u></b>", _label_lg),
+        Paragraph(str(order.exporter.name), _val_sm),
+        Paragraph(str(order.exporter.address), _val_sm),
+        Paragraph(str(order.exporter.city), _val_sm),
+        Paragraph(f"POST CODE: {order.exporter.post_code}", _val_sm),
+        Paragraph(f"TAX ID: {order.exporter.tax_id}", _val_sm),
+        Paragraph(f"PH: {order.exporter.phone}", _val_sm),
+        _sep(),
+        Paragraph("<b><u>PORT OF LOADING :</u></b>", _label_sm),
+        Paragraph("MUNDRA, INDIA", _val_xs),
     ]
 
-    # C. COLUMNA 3: PI INFO & DATES
-    today = datetime.today()
-    valid_until = today + timedelta(days=15)
-    today_str = today.strftime("%d/%m/%Y")
-    valid_until_str = valid_until.strftime("%d/%m/%Y")
-
-    pi_info_data = [
-        [p_label("PI NO. :", is_large=True)],
-        [p_val(f"{order.pi_number} / {today.year}", is_bold=True)],
-        [p_label("VALID DATE :")],
-        [p_val(f"{today_str} TO {valid_until_str}")],
-        [p_label("FINAL DESTINATION :")],
-        [p_val(order.country_destination.upper())],
-        [p_label("PORT OF DISCHARGE :")],
-        [p_val(order.port_of_discharge.upper())]
+    # ── COLUMN 2: CONSIGNEE (relative) + TERMS ───────────────────────────
+    consignee_content = [
+        Paragraph("<b><u>CONSIGNEE :</u></b>", _label_lg),
+        Paragraph(c_name, _val_sm),
+        Paragraph(c_addr, _val_sm),
+        Paragraph(
+            f"{order.consignee.city}, {order.consignee.country.upper()}",
+            _val_sm,
+        ),
+        Paragraph(f"POST CODE: {order.consignee.post_code}", _val_sm),
+        Paragraph(f"TAX ID: {order.consignee.tax_id}", _val_sm),
+        Paragraph(f"PH: {order.consignee.phone}", _val_sm),
+        _sep(),
+        Paragraph("<b><u>TERMS OF DELIVERY &amp; PAYMENT :</u></b>", _label_sm),
+        Paragraph(
+            f"{order.incoterms.upper()} {order.terms_and_payment.upper()}",
+            _val_xs,
+        ),
     ]
 
-    # Sub-tablas con estilos para simular la línea divisora interna (`BorderTop`)
-    col1_table = Table(exporter_data, colWidths=['100%'])
-    col1_table.setStyle(TableStyle([
-        ('LINEABOVE', (0, 7), (-1, 7), 0.5, colors.black), # Línea en PORT OF LOADING
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    # ── COLUMN 3: PI NO / VALID DATE / FINAL DEST / PORT DISCH (5.5 cm) ─
+    pi_content = [
+        Paragraph("<b><u>PI NO. :</u></b>", _label_lg),
+        Paragraph(f"{order.pi_number} / {today.year}", _val_lg),
+        Paragraph("<b><u>VALID DATE :</u></b>", _label_md),
+        Paragraph(f"{today_s} TO {due_s}", _val_lg2),
+        Paragraph("<b><u>FINAL DESTINATION :</u></b>", _label_md),
+        Paragraph(str(order.country_destination).upper(), _val_lg2),
+        _sep(),
+        Paragraph("<b><u>PORT OF DISCHARGE :</u></b>", _label_sm),
+        Paragraph(str(order.port_of_discharge).upper(), _val_xs),
+    ]
+
+    # ── Single table: BOX (outer) + LINEAFTER (vertical separators) ───────
+    info_tbl = Table(
+        [[exporter_content, consignee_content, pi_content]],
+        colWidths=[COL1_W, COL2_W, COL3_W],
+    )
+    info_tbl.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), BORDER_W, colors.black),
+        ("LINEAFTER",    (0, 0), (1, -1),  BORDER_W, colors.black),
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.white),
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]))
 
-    col2_table = Table(consignee_data, colWidths=['100%'])
-    col2_table.setStyle(TableStyle([
-        ('LINEABOVE', (0, 7), (-1, 7), 0.5, colors.black), # Línea en TERMS OF DELIVERY
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-    ]))
-
-    col3_table = Table(pi_info_data, colWidths=['100%'])
-    col3_table.setStyle(TableStyle([
-        ('LINEABOVE', (0, 6), (-1, 6), 0.5, colors.black), # Línea en PORT OF DISCHARGE
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-    ]))
-
-    # --- 5. TABLA CONTENEDORA DE LAS 3 COLUMNAS ---
-    # Ancho A4 imprimible = ~19cm (5.5cm + 8cm + 5.5cm)
-    columns_table = Table([[col1_table, col2_table, col3_table]], colWidths=[5.5 * cm, 8 * cm, 5.5 * cm])
-    columns_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
-
-    elements.append(columns_table)
-    return elements
+    return [title_tbl, logo_tbl, info_tbl]
