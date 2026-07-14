@@ -1,315 +1,393 @@
-# src/infrastructure/services/pdf/components/content.py
+# src/infrastructure/services/pdf/proforma_type_a/components/content_a.py
+
 from io import BytesIO
 from typing import Dict, List, Optional
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
-from reportlab.lib.units import cm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.units import mm, cm
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.platypus import (
+    Table, TableStyle, Paragraph, Spacer, Image as RLImage,
+)
 
-from src.infrastructure.services.pdf.utils.number_to_words import amount_to_words
+# ── number-to-words (optional fallback) ──────────────────────────────────
+try:
+    from src.infrastructure.services.pdf.utils.number_to_words import amount_to_words
+except ImportError:
+    def amount_to_words(value: float) -> str:
+        return f"{value:,.2f} ONLY"
+
+# ── Constants ─────────────────────────────────────────────────────────────
+BORDER_W     = 0.3       # 0.1 mm  ≈ 0.28 pt  (data cell borders)
+BORDER_OUTER = 0.6       # 0.2 mm  ≈ 0.57 pt  (products table outer)
+BORDER_HDR   = 1.0       # 1 pt    (header cells, DefaultCellStyle Border(1))
+GREY_L1      = colors.HexColor("#E0E0E0")   # QuestPDF Grey.Lighten1
+TOTAL_W      = 567       # A4 usable width (~14 mm margins)
+
+PROD_COLS = [60, 120, 65, 67, 40, 40, 68, 40, 67]
+
+BANK_COLS = [100, 217, 125, 125]
+
+SIGN_COLS = [267, 140, 160]
+
+# ── Paragraph styles ─────────────────────────────────────────────────────
+_hdr        = ParagraphStyle("hdr",        fontName="Helvetica-Bold", fontSize=8,  leading=10, alignment=1)
+_cell       = ParagraphStyle("cell",       fontName="Helvetica",       fontSize=8,  leading=10, alignment=1)
+_cell_bold  = ParagraphStyle("cell_bold",  fontName="Helvetica-Bold", fontSize=9,  leading=11, alignment=1)
+_cell_right = ParagraphStyle("cell_right", fontName="Helvetica-Bold", fontSize=8,  leading=10, alignment=2)
+_cell_left  = ParagraphStyle("cell_left",  fontName="Helvetica",       fontSize=8,  leading=10, alignment=0)
+_total_txt  = ParagraphStyle("total_txt",  fontName="Helvetica-Bold", fontSize=11, leading=15, alignment=1)
+_words_lbl  = ParagraphStyle("words_lbl",  fontName="Helvetica-Bold", fontSize=10, leading=12, alignment=0)
+_words_val  = ParagraphStyle("words_val",  fontName="Helvetica",       fontSize=8,  leading=10, alignment=1)
+_bnk_title  = ParagraphStyle("bnk_title",  fontName="Helvetica-Bold", fontSize=9,  leading=11, alignment=0)
+_lbl_right  = ParagraphStyle("lbl_right",  fontName="Helvetica-Bold", fontSize=8,  leading=10, alignment=2)
+_lbl_left   = ParagraphStyle("lbl_left",   fontName="Helvetica-Bold", fontSize=8,  leading=10, alignment=0)
+_small      = ParagraphStyle("small",      fontName="Helvetica",       fontSize=7,  leading=9,  alignment=1)
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+def _fmt(value: float, currency: int) -> str:
+    """FormatCurrency: $1,234.56  or  €1,234.56"""
+    sym = "$" if currency == 1 else "€"
+    return f"{sym}{value:,.2f}"
 
 
-def _format_currency(value: float, currency_type: int) -> str:
-    symbol = "$" if currency_type == 1 else "€"
-    return f"{symbol}{value:,.2f}"
+def _rotate_image(stream: BytesIO) -> Optional[RLImage]:
+    """Rotate 90° CW (matching .NET RotateRight) and resize to square."""
+    try:
+        img = PILImage.open(stream)
+        img = img.rotate(270, expand=True)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return RLImage(buf, width=56, height=28)
+    except Exception:
+        return None
 
-
+# ══════════════════════════════════════════════════════════════════════════
 def build_content_component(
-    order, 
-    slab_images: Dict[str, BytesIO], 
-    sign_stream: Optional[BytesIO] = None
+    order,
+    slab_images: Dict[str, BytesIO],
+    sign_stream: Optional[BytesIO] = None,
 ) -> List:
-    elements = []
+    elements: List = []
 
-    # --- 1. ESTILOS DE TEXTO ---
-    styles = getSampleStyleSheet()
-    
-    cell_style = ParagraphStyle('Cell', fontName='Helvetica', fontSize=7, alignment=1, leading=9)
-    cell_left_style = ParagraphStyle('CellLeft', fontName='Helvetica', fontSize=7, alignment=0, leading=9)
-    cell_right_style = ParagraphStyle('CellRight', fontName='Helvetica', fontSize=7, alignment=2, leading=9)
-    
-    header_cell_style = ParagraphStyle('HCell', fontName='Helvetica-Bold', fontSize=7, alignment=1, leading=9)
-    header_left_style = ParagraphStyle('HCellLeft', fontName='Helvetica-Bold', fontSize=7, alignment=0, leading=9)
-    header_right_style = ParagraphStyle('HCellRight', fontName='Helvetica-Bold', fontSize=7, alignment=2, leading=9)
-    
-    label_u_style = ParagraphStyle('LabelU', fontName='Helvetica-Bold', fontSize=8, leading=10)
-    label_u_right_style = ParagraphStyle('LabelURight', fontName='Helvetica-Bold', fontSize=8, alignment=2, leading=10)
+    # ── Extract order fields ──────────────────────────────────────────────
+    slabs        = order.slabs
+    currency     = order.currency
+    discount     = getattr(order, "discount", 0) or 0
+    ocean_freight = getattr(order, "ocean_freight", 0) or 0
+    count_20ft   = getattr(order, "container_20ft", 0) or 0
+    count_40ft   = getattr(order, "container_40ft", 0) or 0
+    hscode       = getattr(order, "hscode_id", "")
+    label        = getattr(order, "box_sticker", "REGULAR")
+    boxes        = getattr(order, "box_design", "REGULAR")
+    note         = getattr(order, "packing_note", "REGULAR")
+    bank         = order.bank
 
-    # --- 2. CÁLCULOS SOBRE LOS SLABS / PRODUCTOS ---
-    total_qty = 0
-    total_area = 0.0
-    total_pallets = 0.0
-    subtotal = 0.0
+    # ════════════════════════════════════════════════════════════════════
+    # CALCULATIONS  (matching .NET foreach + summary)
+    # ════════════════════════════════════════════════════════════════════
+    tot_qty      = 0
+    tot_area     = 0.0
+    tot_pallets  = 0.0
+    tot_subtotal = 0.0
 
-    table_data = [[
-        Paragraph("SIZE IN MM", header_cell_style),
-        Paragraph("DESCRIPTION OF THE ITEM", header_cell_style),
-        Paragraph("ITEM IMAGE", header_cell_style),
-        Paragraph("FINISHING", header_cell_style),
-        Paragraph("NO. PCS", header_cell_style),
-        Paragraph("NO. CRATES", header_cell_style),
-        Paragraph("SQUARE METER", header_cell_style),
-        Paragraph("PRICE USD" if order.currency == 1 else "PRICE EUR", header_cell_style),
-        Paragraph("TOTAL AMOUNT", header_cell_style),
-    ]]
+    for s in slabs:
+        ps     = s.pallet_slabs if s.pallet_slabs else 1
+        pallet = 0.0 if ps == 0 else (20.0 if s.qty == 0 else s.qty / ps)
+        area   = s.qty * (s.width * s.height)
+        area   = 0.0 if area < 1 else area
+        amount = (s.price or 0) * area
 
-    for slab in order.slabs:
-        # Lógica de Pallets
-        current_pallet_slabs_r = slab.pallet_slabs if slab.pallet_slabs else 1
-        if current_pallet_slabs_r == 0:
-            pallet_r = 0.0
+        tot_qty      += s.qty
+        tot_area     += area
+        tot_pallets  += pallet
+        tot_subtotal += amount
+
+    total = tot_subtotal - discount + ocean_freight
+
+    # ════════════════════════════════════════════════════════════════════
+    # 1. PRODUCTS TABLE
+    # ════════════════════════════════════════════════════════════════════
+    price_hdr = "PRICE USD FOB" if currency == 1 else "PRICE EUR FOB"
+    header_row = [
+        Paragraph("SIZE IN MM",             _hdr),
+        Paragraph("DESCRIPTION OF THE ITEM", _hdr),
+        Paragraph("ITEM IMAGE",              _hdr),
+        Paragraph("FINISHING",               _hdr),
+        Paragraph("NO. PCS",                 _hdr),
+        Paragraph("NO. CRATES",              _hdr),
+        Paragraph("SQUARE METER",            _hdr),
+        Paragraph(price_hdr,                 _hdr),
+        Paragraph("TOTAL AMOUNT",            _hdr),
+    ]
+    table_data = [header_row]
+
+    for s in slabs:
+        ps     = s.pallet_slabs if s.pallet_slabs else 1
+        pallet = 0.0 if ps == 0 else (20.0 if s.qty == 0 else s.qty / ps)
+        dims   = f"{int(s.width * 1000)}X{int(s.height * 1000)}X{s.thickness}"
+
+        area   = s.qty * (s.width * s.height)
+        area   = 0.0 if area < 1 else area
+        amount = (s.price or 0) * area
+
+        # ── Image: rotate 90° CW, 1 cm, with 0.1mm border + 0.5mm pad ──
+        img_s = slab_images.get(s.image)
+        if img_s:
+            rot = _rotate_image(img_s)
+            if rot:
+                img_el = rot
+                img_el.hAlign = 'CENTER'
+            else:
+                img_el = Paragraph("No Image", _small)
         else:
-            pallet_r = 20.0 if slab.qty == 0 else (slab.qty / current_pallet_slabs_r)
-
-        # Lógica de Área
-        area_r = slab.qty * (slab.width * slab.height)
-        calculated_area = area_r if area_r >= 1 else 0.0
-
-        # Subtotal
-        calculated_subtotal = (slab.price or 0.0) * calculated_area
-
-        total_qty += slab.qty
-        total_area += calculated_area
-        total_pallets += pallet_r
-        subtotal += calculated_subtotal
-
-        dims = f"{int(slab.width * 1000)}X{int(slab.height * 1000)}X{slab.thickness}"
-        
-        # Imagen
-        img_stream = slab_images.get(slab.image)
-        if img_stream:
-            img_element = RLImage(img_stream, width=1 * cm, height=1 * cm)
-            img_element.hAlign = 'CENTER'
-        else:
-            img_element = Paragraph("No Image", ParagraphStyle('NoImg', fontName='Helvetica', fontSize=6, alignment=1))
+            img_el = Paragraph("No Image", _small)
 
         table_data.append([
-            Paragraph(dims, cell_style),
-            Paragraph(slab.name, cell_style),
-            img_element,
-            Paragraph(slab.finished, cell_style),
-            Paragraph(str(slab.qty), cell_style),
-            Paragraph(f"{pallet_r:.2f}", cell_style),
-            Paragraph(f"{calculated_area:.2f}", cell_style),
-            Paragraph(_format_currency(slab.price or 0.0, order.currency), header_cell_style),
-            Paragraph(_format_currency(calculated_subtotal, order.currency), cell_style)
+            Paragraph(dims,                           _cell),
+            Paragraph(s.name,                         _cell),
+            img_el,
+            Paragraph(str(s.finished),                _cell),
+            Paragraph(str(s.qty),                     _cell),
+            Paragraph(f"{pallet:.2f}",                _cell),
+            Paragraph(f"{area:.2f}",                  _cell),
+            Paragraph(_fmt(s.price or 0, currency),   _cell_bold),
+            Paragraph(_fmt(amount, currency),         _cell),
         ])
 
-    # --- 3. LÓGICA DE CONTENEDORES Y TOTALES ---
-    count_20ft = getattr(order, 'count_20ft', 0)
-    count_40ft = getattr(order, 'count_40ft', 0)
-
+    # ── Containers string ─────────────────────────────────────────────────
     containers = " "
     if count_20ft == 0 and count_40ft > 0:
         containers = f"{count_40ft}X40FT" if count_40ft > 9 else f"0{count_40ft}X40FT"
     elif count_40ft == 0 and count_20ft > 0:
         containers = f"{count_20ft}X20FT" if count_20ft > 9 else f"0{count_20ft}X20FT"
-    elif count_40ft > 0 and count_20ft > 0:
+    elif count_20ft > 0 and count_40ft > 0:
         containers = f"0{count_20ft}X20FT & 0{count_40ft}X40FT"
 
-    total_order_text = f"TOTAL ORDER OF {containers}. HS-CODE: {order.hscode_id}."
-    grand_total = subtotal - order.discount + order.ocean_freight
+    # ── Total rows ────────────────────────────────────────────────────────
+    n        = len(slabs)
+    tr       = n + 1                       # first total row index
+    has_disc = discount > 0
+    has_frt  = ocean_freight > 0
+    has_ex   = has_disc or has_frt
+    has_both = has_disc and has_frt
 
-    # Fila base de totales
+
+    total_text = f"TOTAL ORDER OF {containers}. HS-CODE: {hscode}."
+
+    # Base total row (Qty / Pallets / Area / empty / Subtotal)
     table_data.append([
-        Paragraph(total_order_text, header_cell_style),
-        "", "", "", # Celdas unidas por SPAN
-        Paragraph(str(total_qty), header_cell_style),
-        Paragraph(f"{total_pallets:.1f}", header_cell_style),
-        Paragraph(f"{total_area:.2f}", header_cell_style),
+        Paragraph(total_text,                              _total_txt),
+        "", "", "",
+        Paragraph(str(tot_qty),                           _cell_bold),
+        Paragraph(f"{tot_pallets:.1f}",                   _cell_bold),
+        Paragraph(f"{tot_area:.2f}",                      _cell_bold),
         "",
-        Paragraph(_format_currency(subtotal, order.currency), header_cell_style)
+        Paragraph(_fmt(tot_subtotal, currency),            _cell_bold),
     ])
 
-    # Filas opcionales (Descuento, Flete Marítimo, Total General)
-    has_discount = order.discount > 0
-    has_freight = order.ocean_freight > 0
+    # Extra rows
+    if has_disc:
+        table_data.append(["", "", "", "", "", "",
+                           Paragraph("Discount", _cell_right), "",
+                           Paragraph(_fmt(discount, currency), _cell_bold)])
+    if has_frt:
+        table_data.append(["", "", "", "", "", "",
+                           Paragraph("Ocean Freight", _cell_right), "",
+                           Paragraph(_fmt(ocean_freight, currency), _cell_bold)])
+    if has_ex:
+        table_data.append(["", "", "", "", "", "",
+                           Paragraph("Grand Total", _cell_right), "",
+                           Paragraph(_fmt(total, currency), _cell_bold)])
 
-    if has_discount:
-        table_data.append([
-            "", "", "", "", "", "",
-            Paragraph("Discount", header_right_style),
-            "",
-            Paragraph(_format_currency(order.discount, order.currency), header_cell_style)
-        ])
+    # ── Build + style products table ──────────────────────────────────────
+    prod_tbl = Table(table_data, colWidths=PROD_COLS)
 
-    if has_freight:
-        table_data.append([
-            "", "", "", "", "", "",
-            Paragraph("Ocean Freight", header_right_style),
-            "",
-            Paragraph(_format_currency(order.ocean_freight, order.currency), header_cell_style)
-        ])
-
-    if has_discount or has_freight:
-        table_data.append([
-            "", "", "", "", "", "",
-            Paragraph("Grand Total", header_right_style),
-            "",
-            Paragraph(_format_currency(grand_total, order.currency), header_cell_style)
-        ])
-
-    # Anchos exactos para 19cm (A4 imprimible)
-    products_table = Table(table_data, colWidths=[55, 110, 50, 55, 35, 45, 55, 60, 75])
-    
-    # Estilizado dinámico de la tabla de productos
-    base_table_style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E0E0E0")),
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    style = [
+        # Outer border 0.2 mm
+        ("BOX", (0, 0), (-1, -1), BORDER_OUTER, colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), GREY_L1),
+        ("INNERGRID", (0, 1), (-1, n), BORDER_W, colors.black),
+        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 1),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 1),
     ]
 
-    # Calcular Span de la primera fila de totales
-    first_total_row_idx = len(order.slabs) + 1
-    
-    # Determinar Span del total text segun filas extras
-    extra_rows = (1 if has_discount else 0) + (1 if has_freight else 0) + (1 if (has_discount or has_freight) else 0)
-    
-    if extra_rows > 0:
-        base_table_style.append(('SPAN', (0, first_total_row_idx), (3, first_total_row_idx + extra_rows)))
-        base_table_style.append(('BACKGROUND', (0, first_total_row_idx), (3, first_total_row_idx + extra_rows), colors.HexColor("#E0E0E0")))
+    # Total row styling
+    if has_both:
+        # RowSpan 4 on TOTAL ORDER text
+        style.extend([
+            ("SPAN",       (0, tr), (3, tr + 3)),
+            ("BACKGROUND", (0, tr), (-1, tr + 3), GREY_L1),
+            ("LINEABOVE",  (4, tr), (6, tr), 1, colors.black),
+        ])
+        # SPANs for label columns in extra rows
+        er = tr + 1
+        if has_disc:
+            style.append(("SPAN", (6, er), (7, er)))
+            er += 1
+        if has_frt:
+            style.append(("SPAN", (6, er), (7, er)))
+            er += 1
+        # Grand Total row
+        style.extend([
+            ("SPAN",       (6, er), (7, er)),
+            ("LINEBELOW",  (0, er), (5, er), 1, colors.black),
+        ])
+    elif has_ex:
+        # RowSpan 3
+        style.extend([
+            ("SPAN",       (0, tr), (3, tr + 2)),
+            ("BACKGROUND", (0, tr), (-1, tr + 2), GREY_L1),
+        ])
+        er = tr + 1
+        if has_disc:
+            style.append(("SPAN", (6, er), (7, er)))
+            er += 1
+        if has_frt:
+            style.append(("SPAN", (6, er), (7, er)))
+            er += 1
+        style.extend([
+            ("SPAN",      (6, er), (7, er)),
+        ])
     else:
-        base_table_style.append(('SPAN', (0, first_total_row_idx), (3, first_total_row_idx)))
-        base_table_style.append(('BACKGROUND', (0, first_total_row_idx), (-1, first_total_row_idx), colors.HexColor("#E0E0E0")))
+        # ColumnSpan 4, no RowSpan
+        style.extend([
+            ("SPAN",       (0, tr), (3, tr)),
+            ("BACKGROUND", (0, tr), (-1, tr), GREY_L1),
+        ])
 
-    # Colorear fondo de las filas de totales extras
-    if extra_rows > 0:
-        for idx in range(first_total_row_idx, first_total_row_idx + extra_rows + 1):
-            base_table_style.append(('BACKGROUND', (4, idx), (-1, idx), colors.HexColor("#E0E0E0")))
-            base_table_style.append(('SPAN', (6, idx), (7, idx))) # Unir etiqueta "Discount/Freight/Grand Total"
+    prod_tbl.setStyle(TableStyle(style))
+    elements.append(prod_tbl)
+    elements.append(Spacer(1, 9))
 
-    products_table.setStyle(TableStyle(base_table_style))
-    elements.append(products_table)
-    elements.append(Spacer(1, 6))
+    words = amount_to_words(total).upper()
 
-    # --- 4. AMOUNT CHARGEABLE IN WORDS ---
-    currency_code = "USD" if order.currency == 1 else "EUR"
-    words_text = amount_to_words(grand_total, currency_code).upper()
-
-    words_table = Table([
-        [Paragraph("<u><b>AMOUNT CHARGEABLE IN WORDS :</b></u>", ParagraphStyle('WHead', fontName='Helvetica-Bold', fontSize=9, leading=11))],
-        [Paragraph(words_text, cell_style)]
-    ], colWidths=['100%'])
-    words_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('PADDING', (0, 0), (-1, -1), 3),
-        ('ALIGN', (0, 1), (0, 1), 'CENTER')
+    words_tbl = Table(
+        [[Paragraph("<b><u>AMOUNT CHARGEABLE IN WORDS :</u></b>", _words_lbl)],
+         [Paragraph(words, _words_val)]],
+        colWidths=[TOTAL_W],
+    )
+    words_tbl.setStyle(TableStyle([
+        ("BOX",          (0, 0), (-1, -1), BORDER_W, colors.black),
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.white),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]))
-    elements.append(words_table)
-    elements.append(Spacer(1, 6))
+    elements.append(words_tbl)
+    elements.append(Spacer(1, 9))
 
-    # --- 5. INFORMACIÓN BANCARIA Y EMBALAJE ---
-    bank = order.bank
-    currency_str = "USD DOLLAR ($)" if order.currency == 1 else "EUR EURO (€)"
-    intermediary = "NA" if order.currency == 2 else (getattr(bank, 'intermediary_bank', '') or '')
+    currency_str = "USD DOLLAR ($)" if currency == 1 else "EUR EURO (€)"
+    intermediary = "NA" if currency == 2 else (getattr(bank, "intermediary_bank", "") or "")
 
-    bank_table_data = [
-        [
-            Paragraph("<u><b>OUR BANK DETAILS :</b></u>", ParagraphStyle('BTitle', fontName='Helvetica-Bold', fontSize=9, leading=11)),
-            "",
-            Paragraph("<u><b>PALLET & BOX STICKER :</b></u>", ParagraphStyle('STitle', fontName='Helvetica-Bold', fontSize=8, leading=10)),
-            ""
-        ],
-        [
-            Paragraph("<u><b>BENEFICIARY NAME :</b></u>", label_u_right_style),
-            Paragraph(bank.beneficiary, cell_left_style),
-            Paragraph(order.box_sticker.upper(), cell_style),
-            ""
-        ],
-        [
-            Paragraph("<u><b>BANK NAME :</b></u>", label_u_right_style),
-            Paragraph(bank.bank_name, cell_left_style),
-            Paragraph("<u><b>BOX DESIGN :</b></u>", label_u_style),
-            ""
-        ],
-        [
-            Paragraph("<u><b>CURRENCY ACCOUNT :</b></u>", label_u_right_style),
-            Paragraph(currency_str, cell_left_style),
-            Paragraph(order.box_design.upper(), cell_style),
-            ""
-        ],
-        [
-            Paragraph("<u><b>BANK ACCOUNT NO. :</b></u>", label_u_right_style),
-            Paragraph(bank.bank_account_no, cell_left_style),
-            Paragraph("<u><b>PACKING NOTE :</b></u>", label_u_style),
-            ""
-        ],
-        [
-            Paragraph("<u><b>SWIFT CODE :</b></u>", label_u_right_style),
-            Paragraph(bank.swift_code, cell_left_style),
-            Paragraph(order.packing_note.upper(), cell_style),
-            ""
-        ],
-        [
-            Paragraph("<u><b>INTERMEDIARY BANK :</b></u>", label_u_right_style),
-            Paragraph(intermediary, cell_left_style),
-            "",
-            ""
-        ]
+    bank_data = [
+        # Row 0 — Header
+        [Paragraph("<b><u>OUR BANK DETAILS :</u></b>", _bnk_title),
+         "",
+         Paragraph("<b><u>PALLET &amp; BOX STICKER :</u></b>", _lbl_left),
+         ""],
+        # Row 1 — BENEFICIARY NAME | value | sticker value
+        [Paragraph("<b><u> BENEFICIARY NAME :</u></b>", _lbl_right),
+         Paragraph(str(bank.beneficiary), _cell_left),
+         Paragraph(label.upper(), _cell),
+         ""],
+        # Row 2 — BANK NAME | value | BOX DESIGN label
+        [Paragraph("<b><u>BANK NAME :</u></b>", _lbl_right),
+         Paragraph(str(bank.bank_name), _cell_left),
+         Paragraph("<b><u>BOX DESIGN :</u></b>", _lbl_left),
+         ""],
+        # Row 3 — CURRENCY ACCOUNT | value | boxes value
+        [Paragraph("<b><u>CURRENCY ACCOUNT :</u></b>", _lbl_right),
+         Paragraph(currency_str, _cell_left),
+         Paragraph(boxes.upper(), _cell),
+         ""],
+        # Row 4 — BANK ACCOUNT NO. | value | PACKING NOTE label
+        [Paragraph("<b><u>BANK ACCOUNT NO. :</u></b>", _lbl_right),
+         Paragraph(str(bank.bank_account_no), _cell_left),
+         Paragraph("<b><u>PACKING NOTE :</u></b>", _lbl_left),
+         ""],
+        # Row 5 — SWIFT CODE | value | note (rowspan 2)
+        [Paragraph("<b><u>SWIFT CODE :</u></b>", _lbl_right),
+         Paragraph(str(bank.swift_code), _cell_left),
+         Paragraph(note.upper(), _cell),
+         ""],
+        # Row 6 — INTERMEDIARY BANK | value | (part of note rowspan)
+        [Paragraph("<b><u>INTERMEDIARY BANK :</u></b>", _lbl_right),
+         Paragraph(intermediary, _cell_left),
+         "",
+         ""],
     ]
 
-    bank_table = Table(bank_table_data, colWidths=[100, 180, 130, 130])
-    bank_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('INNERGRID', (0, 0), (1, -1), 0.5, colors.black), # Línea vertical divisora entre banco y stickers
-        ('LINEAFTER', (1, 0), (1, -1), 0.5, colors.black),
-        ('SPAN', (0, 0), (1, 0)),  # OUR BANK DETAILS
-        ('SPAN', (2, 0), (3, 0)),  # PALLET & BOX STICKER
-        ('SPAN', (2, 1), (3, 1)),  # Label content
-        ('SPAN', (2, 2), (3, 2)),  # BOX DESIGN Title
-        ('SPAN', (2, 3), (3, 3)),  # Boxes content
-        ('SPAN', (2, 4), (3, 4)),  # PACKING NOTE Title
-        ('SPAN', (2, 5), (3, 6)),  # Note content (RowSpan 2)
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    bank_tbl = Table(bank_data, colWidths=BANK_COLS)
+    bank_tbl.setStyle(TableStyle([
+        # Outer border 0.1 mm
+        ("BOX", (0, 0), (-1, -1), BORDER_W, colors.black),
+        # Vertical divider between bank cols and sticker cols
+        ("LINEAFTER", (1, 0), (1, -1), BORDER_W, colors.black),
+        # Header SPANs
+        ("SPAN", (0, 0), (1, 0)),       # OUR BANK DETAILS
+        ("SPAN", (2, 0), (3, 0)),       # PALLET & BOX STICKER
+        # Right-side SPANs (matching .NET ColumnSpan(2))
+        ("SPAN", (2, 1), (3, 1)),       # sticker value
+        ("SPAN", (2, 2), (3, 2)),       # BOX DESIGN label
+        ("SPAN", (2, 3), (3, 3)),       # boxes value
+        ("SPAN", (2, 4), (3, 4)),       # PACKING NOTE label
+        ("SPAN", (2, 5), (3, 6)),       # note value (RowSpan 2)
+        # Alignment & padding
+        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",  (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
     ]))
-    elements.append(bank_table)
-    elements.append(Spacer(1, 6))
+    elements.append(bank_tbl)
+    elements.append(Spacer(1, 9))
 
-    # --- 6. DECLARACIÓN Y FIRMA ---
-    declaration_text = "DECLARATION: We declare that this invoice shows the actual price of goods described and all particulars are true and correct."
-    
+    decl = "DECLARATION: We declare that this invoice shows the actual price of goods described and all particulars are true and correct."
+
     if sign_stream:
-        sign_element = RLImage(sign_stream, width=5.5 * cm, height=1.8 * cm)
-        sign_element.hAlign = 'CENTER'
+        try:
+            sign_stream.seek(0)
+            sign_el = RLImage(BytesIO(sign_stream.getvalue()), width=150, height=30)
+            sign_el.hAlign = "CENTER"
+        except Exception:
+            sign_el = Paragraph("[SIGNATURE]", _small)
     else:
-        sign_element = Paragraph("<b>[ AUTHORIZED SIGNATURE ]</b>", cell_style)
+        sign_el = Paragraph("[SIGNATURE]", _small)
 
-    sign_table_data = [
-        [
-            Paragraph(declaration_text, cell_style),
-            Paragraph("For,", cell_style),
-            sign_element
-        ],
-        [
-            "",
-            Paragraph(f"<b>{bank.beneficiary}</b>", ParagraphStyle('Ben', fontName='Helvetica-Bold', fontSize=7, alignment=1)),
-            ""
-        ],
-        [
-            "",
-            Paragraph("Authorized", cell_style),
-            ""
-        ]
+    sign_data = [
+        [Paragraph(decl,                              _cell),
+         Paragraph("For,",                             _cell),
+         sign_el],
+        ["",
+         Paragraph(str(bank.beneficiary),              _small),
+         ""],
+        ["",
+         Paragraph("Authorized",                       _cell),
+         ""],
     ]
 
-    sign_table = Table(sign_table_data, colWidths=[240, 140, 160])
-    sign_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('SPAN', (0, 0), (0, 2)), # DECLARATION RowSpan 3
-        ('SPAN', (2, 0), (2, 2)), # SIGNATURE RowSpan 3
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    sign_tbl = Table(sign_data, colWidths=SIGN_COLS)
+    sign_tbl.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), BORDER_W, colors.black),
+        ("LINEAFTER", (0, 0), (1, -1), BORDER_W, colors.black),
+        
+        ("SPAN", (0, 0), (0, 2)),   # Declaration
+        ("SPAN", (2, 0), (2, 2)),   # Sign image
+        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",       (0, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING",  (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1),
     ]))
-    elements.append(sign_table)
+    elements.append(sign_tbl)
 
     return elements

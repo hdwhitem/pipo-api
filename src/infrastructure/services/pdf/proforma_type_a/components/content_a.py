@@ -45,7 +45,7 @@ def build_table_content_component(
     # .NET: 60, 120, 65, Relative, 40, 40, Relative, 40, Relative
     # Approx relative widths: ~52, ~53 → col_widths = [60, 120, 65, 52, 40, 40, 53, 40, 97]
     # ═══════════════════════════════════════════════════════
-    col_widths = [60, 125, 60, 52, 40, 40, 53, 40, 97]
+    col_widths = [60, 125, 60, 60, 40, 40, 53, 40, 89]
     headers = [
         Paragraph("SIZE IN MM", bold_style),
         Paragraph("DESIGN NAME", bold_style),
@@ -100,7 +100,7 @@ def build_table_content_component(
             Paragraph(format_currency(amount, currency), cell_style),
         ])
 
-    # Container format — .NET: conditional leading zero
+
     containers = " "
     if count20ft == 0 and count40ft > 0:
         containers = f"{'0' if count40ft < 10 else ''}{count40ft}X40FT"
@@ -163,9 +163,13 @@ def build_table_content_component(
 
     slabs_table = Table(table_data, colWidths=col_widths)
 
+     # ── Total rows ────────────────────────────────────────────────────────
+    n        = len(slabs)
+    tr       = n + 1                       # first total row index
+
     slab_style_cmds = [
         ('BACKGROUND', (0, 0), (-1, 0), grey_light3),
-        ('GRID', (0, 0), (-1, -1), 0.5, grey_light1),
+        ('GRID', (0, 0), (-1, n), 0.5, grey_light1),
         ('BOX', (0, 0), (-1, -1), 0.3, colors.grey),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -176,6 +180,7 @@ def build_table_content_component(
         ('SPAN', (0, summary_row_idx), (3, summary_row_idx)),
     ]
 
+
     # .NET: Summary text bg = Grey.Lighten2, Total amount bg = Grey.Lighten2
     slab_style_cmds.append(('BACKGROUND', (0, summary_row_idx), (3, summary_row_idx), grey_light2))
     slab_style_cmds.append(('BACKGROUND', (8, summary_row_idx), (8, summary_row_idx), grey_light2))
@@ -185,6 +190,8 @@ def build_table_content_component(
         # .NET: RowSpan(4) on summary text
         total_extra_rows = (1 if discount > 0 else 0) + (1 if ocean_freight > 0 else 0) + 1  # +1 grand total
         slab_style_cmds.append(('SPAN', (0, summary_row_idx), (3, summary_row_idx + total_extra_rows)))
+        slab_style_cmds.append(("BACKGROUND", (0, tr), (3, tr + 2), grey_light3))
+
 
         row_offset = summary_row_idx + 1
         if discount > 0:

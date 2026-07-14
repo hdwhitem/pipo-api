@@ -121,7 +121,7 @@ def build_header_component(order, logo_stream: Optional[BytesIO]) -> List:
     # =====================================================================
     if logo_stream and hasattr(logo_stream, "read"):
         logo_stream.seek(0)
-        logo_img = Image(logo_stream, width=9 * cm, height=1.5 * cm * 0.45)
+        logo_img = Image(logo_stream, width=9 * cm, height=1.8 * cm * 0.45)
     else:
         logo_img = Paragraph("", _val_sm)
 
