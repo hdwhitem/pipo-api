@@ -16,6 +16,7 @@ from src.infrastructure.services.pdf.pdf_service_impl import PdfService
 from src.api.controllers.country_controller import router as country_router
 from src.api.controllers.user_controller import router as user_router
 from src.api.controllers.pdf_controller import router as pdf_router
+from src.api.controllers.invitation_controller import router as invitation_router
 
 # 4. Inicializar la aplicación FastAPI
 app = FastAPI(
@@ -34,3 +35,4 @@ app.state.pdf_service = PdfService()
 app.include_router(country_router)
 app.include_router(user_router)
 app.include_router(pdf_router)
+app.include_router(invitation_router)

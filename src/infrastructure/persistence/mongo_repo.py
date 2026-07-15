@@ -12,6 +12,7 @@ from src.domain.collections.gcountry import Gcountry
 from src.domain.collections.gexporter import GExporter
 from src.domain.collections.gmanufacturer import GManufacturer
 from src.domain.collections.gsupplier import GSupplier
+from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.guser import Guser
 from src.domain.collections.gproforma_number import GProformaNumber
 from src.domain.collections.gorder import GOrder
@@ -32,6 +33,7 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
         self._exporter = self.db["Gexporter"]
         self._manufacturer = self.db["Gmanufacturer"]
         self._bank = self.db["GbankAccount"]
+        self._invitation = self.db["Ginvitation"]
 
 
         # Configuración JWT
@@ -239,3 +241,52 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
                 return GBankAccount(**doc)
 
         return None
+    
+    async def create_invitation_async(self, invitation: GInvitation) -> GInvitation:
+        """
+        Registra una nueva invitación en MongoDB generada por el administrador.
+        """
+        # Convertimos el modelo Pydantic a diccionario compatible con Mongo
+        invitation_data = invitation.model_dump(by_alias=True, exclude_none=True)
+        result = await self._invitation.insert_one(invitation_data)
+        
+        # Asignamos el ID generado de vuelta al objeto
+        invitation.id = str(result.inserted_id)
+        return invitation
+
+    async def verify_and_use_invitation_async(self, code_str: str) -> Dict[str, Any]:
+        """
+        Valida que un código exista, no haya sido usado y no esté expirado.
+        Si es válido, lo marca como utilizado (used = True) en una sola operación atómica.
+        """
+        now_utc = datetime.now(timezone.utc)
+
+        # Buscamos el código activo y que no haya expirado
+        # Usamos update_one con filtros estrictos para evitar condiciones de carrera (Race Conditions)
+        result = await self._invitation.update_one(
+            {
+                "code": code_str,
+                "used": False,
+                "expires_at": {"$gt": now_utc}
+            },
+            {
+                "$set": {
+                    "used": True,
+                    "used_at": now_utc
+                }
+            }
+        )
+
+        if result.modified_count > 0:
+            return {"valid": True, "message": "Invitation code accepted"}
+        
+        # Si no modificó nada, investigamos por qué falló para dar un mensaje claro
+        existing = await self._invitation.find_one({"code": code_str})
+        if not existing:
+            return {"valid": False, "message": "Invalid invitation code"}
+        if existing["used"]:
+            return {"valid": False, "message": "This code has already been used"}
+        if existing["expires_at"] <= now_utc:
+            return {"valid": False, "message": "This code has expired"}
+
+        return {"valid": False, "message": "Verification failed"}

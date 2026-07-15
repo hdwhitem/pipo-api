@@ -4,6 +4,7 @@ from src.domain.collections.gbank_account import GBankAccount
 from src.domain.collections.gconsignee import GConsignee
 from src.domain.collections.gcountry import Gcountry
 from src.domain.collections.gexporter import GExporter
+from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.gmanufacturer import GManufacturer
 from src.domain.collections.gsupplier import GSupplier
 from src.domain.dtos.register_dto import RegisterUserDto
@@ -65,5 +66,15 @@ class IMongoRepo(ABC):
     @abstractmethod
     async def get_bank_account_by_id(self, bank_account_id: str) -> Optional[GBankAccount]:
         """Contrato para obtener bank account por id"""
+        pass
+
+    @abstractmethod
+    async def create_invitation_async(self, invitation: GInvitation) -> GInvitation:
+        """Contrato para registrar una nueva invitación generada por el admin"""
+        pass
+
+    @abstractmethod
+    async def verify_and_use_invitation_async(self, code_str: str) -> Dict[str, Any]:
+        """Contrato para validar y consumir un código de invitación de un solo uso"""
         pass
 
