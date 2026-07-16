@@ -63,7 +63,8 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
             "UserName": dto.name,
             "UserLastName": dto.lastName,
             "UserEmail": dto.email,
-            "UserPassword": hashed_password
+            "UserPassword": hashed_password,
+            "UserRole": "User"
         }
         await self.user_collection.insert_one(new_user)
         return {"flag": True, "message": "registration completed"}
