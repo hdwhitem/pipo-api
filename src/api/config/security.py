@@ -3,6 +3,10 @@ from fastapi import Request, HTTPException, status
 from src.application.interfaces.imongo_repo import IMongoRepo
 
 def verify_authorize(request: Request) -> dict:
+    """
+    Validación de autenticación básica.
+    Verifica que el token sea válido, firma, audiencias y emisor.
+    """
     repo: IMongoRepo = request.app.state.repo
     
     auth_header = request.headers.get("Authorization")
@@ -39,10 +43,37 @@ def verify_authorize(request: Request) -> dict:
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Error: El token realmente está expirado en el tiempo.")
     except jwt.InvalidIssuerError:
-        raise HTTPException(status_code=401, detail=f"Error: El Issuer no coincide.")
+        raise HTTPException(status_code=401, detail="Error: El Issuer no coincide.")
     except jwt.InvalidAudienceError:
-        raise HTTPException(status_code=401, detail=f"Error: El Audience no coincide.")
+        raise HTTPException(status_code=401, detail="Error: El Audience no coincide.")
     except jwt.InvalidSignatureError:
         raise HTTPException(status_code=401, detail="Error: La firma del token no coincide (JWT_KEY incorrecta o diferente entre firmas).")
-    except jwt.PyJWTError as e:
-        raise HTTPException(status_code=401, detail=f"Error interno de JWT")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Error interno de JWT")
+
+
+class RequireRole:
+    """
+    Clase de Autorización por Roles al estilo .NET.
+    Reutiliza internamente tu 'verify_authorize' para validar el token 
+    y luego filtra por los roles permitidos.
+    """
+    def __init__(self, allowed_roles: list[str]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, request: Request) -> dict:
+        # 1. Primero delegamos la validación del token a tu función de siempre
+        decoded_token = verify_authorize(request)
+        
+        # 2. Extraemos el rol usando el Claim estándar de .NET
+        role_claim = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
+        user_role = decoded_token.get(role_claim)
+        
+        # 3. Comprobamos si el rol del usuario está autorizado para este endpoint
+        if user_role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado. No tiene los permisos de rol requeridos para esta acción."
+            )
+            
+        return decoded_token

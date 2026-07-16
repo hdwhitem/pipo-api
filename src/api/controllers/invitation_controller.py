@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from src.domain.collections.ginvitation import GInvitation
 from src.application.interfaces.imongo_repo import IMongoRepo
-from src.api.config.security import verify_authorize 
+from src.api.config.security import RequireRole, verify_authorize 
 
 router = APIRouter(prefix="/Invitation", tags=["Invitation"])
 
@@ -20,7 +20,7 @@ class CreateInvitationRequest(BaseModel):
 async def create_invitation_async(
     request: Request,
     payload: CreateInvitationRequest,
-    user_session: dict = Depends(verify_authorize)  # Protegido: Solo administradores autorizados
+    user_session: dict = Depends(RequireRole(allowed_roles=["Admin"]))
 ):
     """
     Endpoint para que el administrador genere un nuevo código de invitación seguro de un solo uso.

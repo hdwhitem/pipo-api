@@ -7,6 +7,7 @@ class Guser(BaseModel):
     UserLastName: str
     UserEmail: str
     UserPassword: str
+    UserRole: str
 
     class Config:
         populate_by_name = True

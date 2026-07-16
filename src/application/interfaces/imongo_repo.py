@@ -6,6 +6,7 @@ from src.domain.collections.gcountry import Gcountry
 from src.domain.collections.gexporter import GExporter
 from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.gmanufacturer import GManufacturer
+from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
@@ -76,5 +77,20 @@ class IMongoRepo(ABC):
     @abstractmethod
     async def verify_and_use_invitation_async(self, code_str: str) -> Dict[str, Any]:
         """Contrato para validar y consumir un código de invitación de un solo uso"""
+        pass
+
+    @abstractmethod
+    async def create_password_reset_code_async(self, reset_obj: GPasswordReset) -> GPasswordReset:
+        """Registra un nuevo código verificador de contraseña"""
+        pass
+
+    @abstractmethod
+    async def verify_and_use_reset_code_async(self, email: str, code_str: str) -> Dict[str, Any]:
+        """Valida y quema el código verificador de contraseña en una sola operación"""
+        pass
+
+    @abstractmethod
+    async def update_user_password_by_email_async(self, email: str, new_hashed_password: str) -> bool:
+        """Actualiza la contraseña de un usuario usando su email"""
         pass
 

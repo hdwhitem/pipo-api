@@ -11,6 +11,7 @@ from src.domain.collections.gbank_account import GBankAccount
 from src.domain.collections.gcountry import Gcountry
 from src.domain.collections.gexporter import GExporter
 from src.domain.collections.gmanufacturer import GManufacturer
+from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
 from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.guser import Guser
@@ -34,6 +35,7 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
         self._manufacturer = self.db["Gmanufacturer"]
         self._bank = self.db["GbankAccount"]
         self._invitation = self.db["Ginvitation"]
+        self._password_reset = self.db["GPasswordReset"]
 
 
         # Configuración JWT
@@ -74,9 +76,17 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
         # Validación del hash de la contraseña
         if not bcrypt.checkpw(dto.password.encode('utf-8'), user_dict["UserPassword"].encode('utf-8')):
             return {"flag": False, "message": "invalid credentials", "token": None}
+        
+        # ── LEEMOS EL ROL DE MONGO (Si no existe en registros viejos, por defecto es "User") ──
+        user_role = user_dict.get("UserRole", "User")
 
         # Generación del token pasando los claims solicitados
-        token = self.generate_jwt_token(str(user_dict["_id"]), user_dict["UserName"], user_dict["UserEmail"])
+        token = self.generate_jwt_token(
+            str(user_dict["_id"]), 
+            user_dict["UserName"], 
+            user_dict["UserEmail"],
+            user_role
+            )
         
         return {
             "flag": True,
@@ -86,7 +96,7 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
             "email": user_dict["UserEmail"]
         }
 
-    def generate_jwt_token(self, user_id: str, name: str, email: str) -> str:
+    def generate_jwt_token(self, user_id: str, name: str, email: str, role: str) -> str:
         try:
             minutos = int(self.duration)
         except Exception:
@@ -97,11 +107,14 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
         expiracion_timestamp = ahora_timestamp + (minutos * 60)
 
         aud_value = self.jwt_audience.strip() if self.jwt_audience else "localhost"
+        # ── Claim de Rol idéntico al de .NET ────────────────────────
+        role_claim = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
 
         payload = {
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier": user_id,
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name": name,
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress": email,
+            role_claim: role,  # Guardamos el rol ("Admin" o "User") dentro del Token
             "iss": self.jwt_issuer,
             "aud": aud_value,
             "exp": expiracion_timestamp
@@ -290,3 +303,52 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
             return {"valid": False, "message": "This code has expired"}
 
         return {"valid": False, "message": "Verification failed"}
+    
+    async def create_password_reset_code_async(self, reset_obj: GPasswordReset) -> GPasswordReset:
+        # Invalidamos cualquier código anterior activo para este mismo email antes de crear uno nuevo
+        await self._password_reset.update_many(
+            {"email": reset_obj.email, "used": False},
+            {"$set": {"used": True}}
+        )
+        
+        reset_data = reset_obj.model_dump(by_alias=True, exclude_none=True)
+        result = await self._password_reset.insert_one(reset_data)
+        reset_obj.id = str(result.inserted_id)
+        return reset_obj
+
+    async def verify_and_use_reset_code_async(self, email: str, code_str: str) -> Dict[str, Any]:
+        now_utc = datetime.now(timezone.utc)
+        
+        # Intentamos marcar como usado el código que coincida con el email, código y que esté vigente
+        result = await self._password_reset.update_one(
+            {
+                "email": email,
+                "code": code_str,
+                "used": False,
+                "expires_at": {"$gt": now_utc}
+            },
+            {
+                "$set": {"used": True}
+            }
+        )
+        
+        if result.modified_count > 0:
+            return {"valid": True, "message": "Código verificado exitosamente"}
+            
+        # Verificación de feedback en caso de error
+        existing = await self._password_reset.find_one({"email": email, "code": code_str})
+        if not existing:
+            return {"valid": False, "message": "El código o el correo electrónico son incorrectos"}
+        if existing["used"]:
+            return {"valid": False, "message": "Este código ya ha sido utilizado"}
+        if existing["expires_at"] <= now_utc:
+            return {"valid": False, "message": "El código de verificación ha expirado"}
+            
+        return {"valid": False, "message": "Validación fallida"}
+
+    async def update_user_password_by_email_async(self, email: str, new_hashed_password: str) -> bool:
+        result = await self.user_collection.update_one(
+            {"UserEmail": email},
+            {"$set": {"UserPassword": new_hashed_password}}
+        )
+        return result.modified_count > 0
