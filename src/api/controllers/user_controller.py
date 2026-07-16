@@ -1,6 +1,6 @@
 # src/api/controllers/user_controller.py
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Response, Request, Depends
+from fastapi import APIRouter, HTTPException, Query, Response, Request, Depends, status
 
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
@@ -11,9 +11,23 @@ router = APIRouter(prefix="/User", tags=["User"])
 
 
 @router.post("/Register")
-async def register_user(register_dto: RegisterUserDto, request: Request):
+async def register_user(
+    register_dto: RegisterUserDto, 
+    request: Request,
+    code: str = Query(..., description="Invitation Code Required for Registration")
+):
     repo: IMongoRepo = request.app.state.repo
+
+    invitation_validation = await repo.verify_and_use_invitation_async(code)
+    
+    if not invitation_validation["valid"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=invitation_validation["message"]
+        )
+
     result = await repo.register_user_async(register_dto)
+    
     return result
 
 
