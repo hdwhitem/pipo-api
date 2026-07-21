@@ -16,7 +16,7 @@ from src.domain.collections.gsupplier import GSupplier
 from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.guser import Guser
 from src.domain.collections.gproforma_number import GProformaNumber
-from src.domain.collections.gorder import GOrder
+from src.infrastructure.persistence.order_document import OrderDocument
 from src.domain.collections.gconsignee import GConsignee
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
@@ -164,14 +164,14 @@ class MongoRepo(IMongoRepo):
             print(f"No result found. New proforma: {new_proforma.count}")
             return new_count
         
-    async def save_order(self, order: GOrder, session=None) -> GOrder:
+    async def save_order(self, order: OrderDocument, session=None) -> OrderDocument:
         existing_order = await self._order.find_one({"pi_number": order.pi_number}, session=session)
 
         if existing_order is None:
             order_data = order.model_dump(by_alias=True, exclude_none=True)
             result = await self._order.insert_one(order_data, session=session)
 
-            order.id = str(result.inserted_id)
+            order.id = result.inserted_id
 
         return order
     

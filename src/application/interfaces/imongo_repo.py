@@ -10,7 +10,7 @@ from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
-from src.domain.collections.gorder import GOrder
+from src.infrastructure.persistence.order_document import OrderDocument
 
 class IMongoRepo(ABC):
     
@@ -35,7 +35,7 @@ class IMongoRepo(ABC):
         pass
 
     @abstractmethod
-    async def save_order(self, order: GOrder) -> GOrder:
+    async def save_order(self, order: OrderDocument) -> OrderDocument:
         """Contrato para guardar la orden"""
         pass
 
