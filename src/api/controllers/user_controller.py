@@ -83,7 +83,7 @@ def verify_session(user_session: dict = Depends(verify_authorize)):
 @router.post("/logout")
 def logout_user(response: Response):
     # Eliminación física de la cookie en el navegador
-    response.delete_cookie(key="jwt", path="/")
+    response.delete_cookie(key="access_token", path="/")
     return {"message": "Sesión cerrada correctamente"}
 
 

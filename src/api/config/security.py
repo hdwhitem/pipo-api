@@ -15,7 +15,7 @@ def verify_authorize(request: Request) -> dict:
     if auth_header and auth_header.lower().startswith("bearer "):
         token = auth_header.split(" ")[1]
     else:
-        token = request.cookies.get("jwt")
+        token = request.cookies.get("access_token")
         
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autorizado (Falta Cookie/Token)")
