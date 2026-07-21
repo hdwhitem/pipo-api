@@ -21,10 +21,11 @@ from src.domain.collections.gconsignee import GConsignee
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
 
-class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
-    def __init__(self, connection_string: str):
-        self.client = AsyncIOMotorClient(connection_string)
+class MongoRepo(IMongoRepo):
+    def __init__(self, client: AsyncIOMotorClient):
+        self.client = client
         self.db = self.client["Shop"]
+        # ... (resto de las colecciones se inicializan con esta db)
         self.country_collection = self.db["Gcountry"]
         self.user_collection = self.db["Guser"]
         self._proforma = self.db["GProformaNumber"]
@@ -163,20 +164,20 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
             print(f"No result found. New proforma: {new_proforma.count}")
             return new_count
         
-    async def save_order(self, order: GOrder) -> GOrder:
-        existing_order = await self._order.find_one({"pi_number": order.pi_number})
+    async def save_order(self, order: GOrder, session=None) -> GOrder:
+        existing_order = await self._order.find_one({"pi_number": order.pi_number}, session=session)
 
         if existing_order is None:
             order_data = order.model_dump(by_alias=True, exclude_none=True)
-            result = await self._order.insert_one(order_data)
+            result = await self._order.insert_one(order_data, session=session)
 
             order.id = str(result.inserted_id)
 
         return order
     
-    async def update_pi_number(self, pi: int) -> int:
+    async def update_pi_number(self, pi: int, session=None) -> int:
         # Busca si ya existe un documento con ese 'count'
-        get_proforma = await self._proforma.find_one({"count": pi})
+        get_proforma = await self._proforma.find_one({"count": pi}, session=session)
         now_utc = datetime.now(timezone.utc)
 
         if get_proforma is None:
@@ -186,7 +187,8 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
                 created_date=now_utc
             )
             await self._proforma.insert_one(
-                new_proforma.model_dump(by_alias=True, exclude_none=True)
+                new_proforma.model_dump(by_alias=True, exclude_none=True),
+                session=session
             )
             return pi
         else:
@@ -195,7 +197,8 @@ class MongoRepo(IMongoRepo):  # Implementa la interfaz heredando de ella
             
             result = await self._proforma.update_one(
                 {"_id": doc_id},
-                {"$set": {"created_date": now_utc}}
+                {"$set": {"created_date": now_utc}},
+                session=session
             )
 
             # Si se modificó el documento (o si ya tenía exactamente ese valor)

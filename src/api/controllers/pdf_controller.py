@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response, status
 from src.api.config.security import verify_authorize
 from src.domain.collections.gorder import GOrder
 from src.domain.models.order import Order
-from src.infrastructure.di.service_container import get_pdf_service, get_repo
+from src.infrastructure.di.service_container import get_pdf_service, get_repo, get_uow
 from src.core.exceptions import EntityNotFoundException, ValidationError
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -22,39 +22,43 @@ async def proforma_invoice(
     parameters: GOrder,
     pdf_service = Depends(get_pdf_service),
     mongo_repo = Depends(get_repo),
+    uow = Depends(get_uow),
     user_session: dict = Depends(verify_authorize)
 ) -> Response:
     if parameters is None:
         raise ValidationError("Parameters are required")
 
-    # 1. Gestión de PI Number
-    pi = 0
-    if not parameters.pi_number:
-        pi = await mongo_repo.get_proforma_number()
-        parameters.pi_number = pi
-    else:
-        pi = await mongo_repo.update_pi_number(int(parameters.pi_number))
-    
-    save_order = await mongo_repo.save_order(parameters)
-    if save_order is None:
-        raise ValidationError("Error saving order")
-
-    # 2. Obtención de Entidades Relacionadas desde Mongo
-    consignee = await mongo_repo.get_consignee_by_id(parameters.consignee_id)
-    if consignee is None:
-        raise EntityNotFoundException("Consignee not found")
-
-    supplier = await mongo_repo.get_supplier_by_id(parameters.supplier_id)
-    if supplier is None:
-        raise EntityNotFoundException("Supplier not found")
+    async with uow:
+        # 1. Gestión de PI Number
+        pi = 0
+        if not parameters.pi_number:
+            pi = await mongo_repo.get_proforma_number()
+            parameters.pi_number = pi
+        else:
+            pi = await mongo_repo.update_pi_number(int(parameters.pi_number), session=uow.session)
         
-    exporter = await mongo_repo.get_exporter_by_id(supplier.exporter_id)
-    if exporter is None:
-        raise EntityNotFoundException("Exporter not found")
+        save_order = await mongo_repo.save_order(parameters, session=uow.session)
+        if save_order is None:
+            raise ValidationError("Error saving order")
 
-    bank = await mongo_repo.get_bank_account_by_id(exporter.bank_id)
-    if bank is None:
-        raise EntityNotFoundException("Bank account not found")
+        # 2. Obtención de Entidades Relacionadas desde Mongo
+        consignee = await mongo_repo.get_consignee_by_id(parameters.consignee_id)
+        if consignee is None:
+            raise EntityNotFoundException("Consignee not found")
+
+        supplier = await mongo_repo.get_supplier_by_id(parameters.supplier_id)
+        if supplier is None:
+            raise EntityNotFoundException("Supplier not found")
+            
+        exporter = await mongo_repo.get_exporter_by_id(supplier.exporter_id)
+        if exporter is None:
+            raise EntityNotFoundException("Exporter not found")
+
+        bank = await mongo_repo.get_bank_account_by_id(exporter.bank_id)
+        if bank is None:
+            raise EntityNotFoundException("Bank account not found")
+
+        await uow.commit()
 
     # 3. Construcción del Objeto Order
     order = Order(
