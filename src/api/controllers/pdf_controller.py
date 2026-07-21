@@ -7,6 +7,8 @@ from src.core.exceptions import EntityNotFoundException, ValidationError
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
+from src.domain.dtos.order_request_dto import OrderRequestDto
+
 @router.post(
     "/ProformaInvoice",
     status_code=status.HTTP_200_OK,
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
     }
 )
 async def proforma_invoice(
-    parameters: GOrder,
+    parameters: OrderRequestDto,
     pdf_service = Depends(get_pdf_service),
     mongo_repo = Depends(get_repo),
     uow = Depends(get_uow),
@@ -37,7 +39,32 @@ async def proforma_invoice(
         else:
             pi = await mongo_repo.update_pi_number(int(parameters.pi_number), session=uow.session)
         
-        save_order = await mongo_repo.save_order(parameters, session=uow.session)
+        # Guardamos usando la estructura que Mongo espera (GOrder)
+        # Nota: Aquí estamos convirtiendo el DTO a algo compatible con Mongo
+        from src.domain.collections.gorder import GOrder
+        
+        # Mapeo simple del DTO hacia el modelo de persistencia GOrder
+        order_to_save = GOrder(
+            pi_number=parameters.pi_number,
+            currency=parameters.currency,
+            country_destination=parameters.country_destination,
+            port_of_discharge=parameters.port_of_discharge,
+            terms_and_payment=parameters.terms_and_payment,
+            incoterms=parameters.incoterms,
+            container20ft=parameters.container_20ft,
+            container40ft=parameters.container_40ft,
+            box_sticker=parameters.box_sticker,
+            box_design=parameters.box_design,
+            packing_note=parameters.packing_note,
+            consignee_id=parameters.consignee_id,
+            supplier_id=parameters.supplier_id,
+            hscode_id=parameters.hscode_id,
+            discount=parameters.discount,
+            ocean_freight=parameters.ocean_freight,
+            slab=parameters.slab
+        )
+        
+        save_order = await mongo_repo.save_order(order_to_save, session=uow.session)
         if save_order is None:
             raise ValidationError("Error saving order")
 
