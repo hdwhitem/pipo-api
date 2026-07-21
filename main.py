@@ -1,6 +1,7 @@
-import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from src.core.exceptions import DomainException
 
 # 1. Cargar el archivo .env inmediatamente para configurar local/nube
 load_dotenv()
@@ -9,8 +10,6 @@ load_dotenv()
 from src.api.config.cors_config import configure_cors
 from src.api.config.swagger_config import configure_swagger_security
 from src.infrastructure.di.service_container import infrastructure_container
-
-from src.infrastructure.services.pdf.pdf_service_impl import PdfService
 
 # 3. Importar tus controladores
 from src.api.controllers.country_controller import router as country_router
@@ -24,12 +23,18 @@ app = FastAPI(
     description="Clean Architecture"
 )
 
+# Exception Handlers
+@app.exception_handler(DomainException)
+async def domain_exception_handler(request: Request, exc: DomainException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.message},
+    )
+
 # 5. Ejecutar los desgloses modulares (CORS e Inyección de Dependencias)
 configure_cors(app)
 configure_swagger_security(app)
 infrastructure_container(app)
-
-app.state.pdf_service = PdfService()
 
 # Registrar controladores
 app.include_router(country_router)

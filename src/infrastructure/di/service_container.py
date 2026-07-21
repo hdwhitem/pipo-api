@@ -1,11 +1,18 @@
 # src/infrastructure/di/service_container.py
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from src.infrastructure.persistence.mongo_repo import MongoRepo
+from src.infrastructure.services.pdf.pdf_service_impl import PdfService
+from src.application.interfaces.imongo_repo import IMongoRepo
+from src.application.interfaces.ipdf_service import IPdfService
 
 def infrastructure_container(app: FastAPI) -> None:
-    # Lee la URL de la base de datos desde el entorno (.env local o nube)
     connection_string = os.getenv("MONGODB_URL")
-    
-    # Registramos la instancia única (Singleton) en el estado global de la app
     app.state.repo = MongoRepo(connection_string=connection_string)
+    app.state.pdf_service = PdfService()
+
+def get_repo(request: Request) -> IMongoRepo:
+    return request.app.state.repo
+
+def get_pdf_service(request: Request) -> IPdfService:
+    return request.app.state.pdf_service
