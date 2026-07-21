@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
+from src.domain.dtos.user_dto import UserResponseDto
+from src.domain.dtos.login_response_dto import LoginResponseDto
 from src.application.interfaces.imongo_repo import IMongoRepo
 from src.api.config.security import verify_authorize, RequireRole
 
@@ -43,35 +45,33 @@ async def register_user(
     return result
 
 
-@router.post("/login")
+@router.post("/login", response_model=LoginResponseDto)
 async def log_user_in(login_dto: LoginDto, response: Response, request: Request):
     repo: IMongoRepo = request.app.state.repo
     result = await repo.login_user_async(login_dto)
     
-    if result["flag"]:
-        # Inyección segura de la cookie HttpOnly
-        is_development = repo.jwt_audience in ["localhost", "127.0.0.1"]
-        response.set_cookie(
-            key="jwt",
-            value=result["token"],
-            httponly=True,
-            secure=not is_development,
-            samesite="lax" if is_development else "none",  # 'none' en Cloud para Vercel, 'lax' en Local
-            max_age=3600,
-            path="/"
+    if not result["flag"]:
+        return LoginResponseDto(flag=False, message=result["message"])
+        
+    is_development = repo.jwt_audience in ["localhost", "127.0.0.1"]
+    response.set_cookie(
+        key="access_token",
+        value=result["token"],
+        httponly=True,
+        secure=not is_development,
+        samesite="lax" if is_development else "none",
+        max_age=3600,
+        path="/"
+    )
+        
+    return LoginResponseDto(
+        flag=True,
+        message=result["message"],
+        user=UserResponseDto(
+            name=result["name"],
+            email=result["email"]
         )
-        min_exp = repo.duration
-        expiration_time = (datetime.now(timezone.utc) + timedelta(minutes=min_exp)).isoformat()
-        
-        return {
-            "flag": result["flag"],
-            "message": result["message"],
-            "expiresAt": expiration_time,
-            "name": result["name"],
-            "email": result["email"]
-        }
-        
-    return result
+    )
 
 
 @router.get("/verify")
