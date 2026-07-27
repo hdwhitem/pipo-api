@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Response, status
 from src.api.config.security import verify_authorize
-from src.infrastructure.persistence.order_document import OrderDocument
+from src.infrastructure.persistence.documents.order_document import OrderDocument
 from src.domain.models.order import Order
 from src.infrastructure.di.service_container import get_pdf_service, get_repo, get_uow
 from src.core.exceptions import EntityNotFoundException, ValidationError
@@ -39,9 +39,6 @@ async def proforma_invoice(
         else:
             pi = await mongo_repo.update_pi_number(int(parameters.pi_number), session=uow.session)
         
-        # Guardamos usando la estructura que Mongo espera (GOrder)
-        # Nota: Aquí estamos convirtiendo el DTO a algo compatible con Mongo
-        from src.infrastructure.persistence.order_document import OrderDocument
         
         # Mapeo simple del DTO hacia el modelo de persistencia OrderDocument
         order_to_save = OrderDocument(

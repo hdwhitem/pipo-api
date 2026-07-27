@@ -16,7 +16,8 @@ from src.domain.collections.gsupplier import GSupplier
 from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.guser import Guser
 from src.domain.collections.gproforma_number import GProformaNumber
-from src.infrastructure.persistence.order_document import OrderDocument
+from src.infrastructure.persistence.documents.order_document import OrderDocument
+from src.infrastructure.persistence.documents.colour_document import ColourDocument
 from src.domain.collections.gconsignee import GConsignee
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
@@ -37,6 +38,7 @@ class MongoRepo(IMongoRepo):
         self._bank = self.db["GbankAccount"]
         self._invitation = self.db["Ginvitation"]
         self._password_reset = self.db["GPasswordReset"]
+        self._colour = self.db["Gcolour"]
 
 
         # Configuración JWT
@@ -47,7 +49,7 @@ class MongoRepo(IMongoRepo):
 
     async def get_country_list_async(self) -> List[Gcountry]:
         countries = []
-        cursor = self.country_collection.find({}).sort("name", 1)
+        cursor = self.country_collection.find({}).sort("Name", 1)
         async for document in cursor:
             countries.append(Gcountry(**document))
         return countries
@@ -164,6 +166,40 @@ class MongoRepo(IMongoRepo):
             print(f"No result found. New proforma: {new_proforma.count}")
             return new_count
         
+    async def save_colour_async(self, colour: ColourDocument) -> ColourDocument:
+        get_colour = await self._colour.find_one({"Name": colour.name})
+
+        if get_colour is None:
+            colour_data = colour.model_dump(by_alias=True, exclude_none=True)
+            result = await self._colour.insert_one(colour_data)
+            colour.id = result.inserted_id
+        else:
+            colour.id = get_colour.get("_id")
+
+        return colour
+
+    async def get_colour_list_async(self) -> List[ColourDocument]:
+        colours = []
+        cursor = self._colour.find({}).sort("Name", 1)
+        async for document in cursor:
+            colours.append(ColourDocument(**document))
+        return colours
+
+    async def delete_colour_async(self, colour_id: str) -> Optional[ColourDocument]:
+        if ObjectId.is_valid(colour_id):
+            object_id = ObjectId(colour_id)
+            get_colour = await self._colour.find_one({"_id": object_id})
+
+            if get_colour is None:
+                return None
+
+            result = await self._colour.delete_one({"_id": object_id})
+
+            if result.deleted_count > 0:
+                return ColourDocument(**get_colour)
+
+        return None
+
     async def save_order(self, order: OrderDocument, session=None) -> OrderDocument:
         existing_order = await self._order.find_one({"pi_number": order.pi_number}, session=session)
 

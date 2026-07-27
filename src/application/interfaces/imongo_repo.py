@@ -8,12 +8,28 @@ from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.gmanufacturer import GManufacturer
 from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
+from src.infrastructure.persistence.documents.colour_document import ColourDocument
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
-from src.infrastructure.persistence.order_document import OrderDocument
+from src.infrastructure.persistence.documents.order_document import OrderDocument
 
 class IMongoRepo(ABC):
     
+    @abstractmethod
+    async def save_colour_async(self, Colour: ColourDocument) -> ColourDocument:
+        """Contrato para guardar o buscar un Colour por nombre"""
+        pass
+
+    @abstractmethod
+    async def get_colour_list_async(self) -> List[ColourDocument]:
+        """Contrato para obtener la lista de Coloures ordenados por nombre"""
+        pass
+
+    @abstractmethod
+    async def delete_colour_async(self, Colour_id: str) -> Optional[ColourDocument]:
+        """Contrato para eliminar un Colour por su ID"""
+        pass
+
     @abstractmethod
     async def get_country_list_async(self) -> List[Gcountry]:
         """Contrato para obtener la lista de países"""

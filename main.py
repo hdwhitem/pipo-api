@@ -13,6 +13,7 @@ from src.api.controllers.country_controller import router as country_router
 from src.api.controllers.user_controller import router as user_router
 from src.api.controllers.pdf_controller import router as pdf_router
 from src.api.controllers.invitation_controller import router as invitation_router
+from src.api.controllers.colour_controller import router as colour_router
 
 load_dotenv()
 
@@ -45,3 +46,4 @@ app.include_router(country_router)
 app.include_router(user_router)
 app.include_router(pdf_router)
 app.include_router(invitation_router)
+app.include_router(colour_router)
