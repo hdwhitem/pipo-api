@@ -77,8 +77,8 @@ def build_content_component(
     currency     = order.currency
     discount     = getattr(order, "discount", 0) or 0
     ocean_freight = getattr(order, "ocean_freight", 0) or 0
-    count_20ft   = getattr(order, "container_20ft", 0) or 0
-    count_40ft   = getattr(order, "container_40ft", 0) or 0
+    count_20ft   = getattr(order, "container20ft", 0) or 0
+    count_40ft   = getattr(order, "container40ft", 0) or 0
     hscode       = getattr(order, "hscode_id", "")
     label        = getattr(order, "box_sticker", "REGULAR")
     boxes        = getattr(order, "box_design", "REGULAR")
