@@ -18,6 +18,8 @@ from src.domain.collections.guser import Guser
 from src.domain.collections.gproforma_number import GProformaNumber
 from src.infrastructure.persistence.documents.order_document import OrderDocument
 from src.infrastructure.persistence.documents.colour_document import ColourDocument
+from src.infrastructure.persistence.documents.consignee_document import ConsigneeDocument
+from src.domain.dtos.paged_result_dto import PagedResult
 from src.domain.collections.gconsignee import GConsignee
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
@@ -166,6 +168,77 @@ class MongoRepo(IMongoRepo):
             print(f"No result found. New proforma: {new_proforma.count}")
             return new_count
         
+    async def save_consignee_async(self, consignee: ConsigneeDocument) -> ConsigneeDocument:
+        consignee.id = None
+        consignee.modified_date = None
+        consignee.created_date = datetime.now(timezone.utc)
+
+        consignee_data = consignee.model_dump(by_alias=True, exclude_none=True)
+        result = await self._consignee.insert_one(consignee_data)
+        consignee.id = result.inserted_id
+        return consignee
+
+    async def update_consignee_async(self, consignee_id: str, consignee: ConsigneeDocument) -> Optional[ConsigneeDocument]:
+        if ObjectId.is_valid(consignee_id):
+            object_id = ObjectId(consignee_id)
+            get_cnee = await self._consignee.find_one({"_id": object_id})
+
+            if get_cnee is None:
+                return None
+
+            consignee.created_date = get_cnee.get("CreatedDate")
+            consignee.modified_date = datetime.now(timezone.utc)
+
+            consignee_data = consignee.model_dump(by_alias=True, exclude_none=True, exclude={"id"})
+            result = await self._consignee.replace_one({"_id": object_id}, consignee_data)
+
+            if result.modified_count > 0 or result.matched_count > 0:
+                consignee.id = object_id
+                return consignee
+
+        return None
+
+    async def delete_consignee_async(self, consignee_id: str) -> Optional[ConsigneeDocument]:
+        if ObjectId.is_valid(consignee_id):
+            object_id = ObjectId(consignee_id)
+            get_cnee = await self._consignee.find_one({"_id": object_id})
+
+            if get_cnee is None:
+                return None
+
+            result = await self._consignee.delete_one({"_id": object_id})
+
+            if result.deleted_count > 0:
+                return ConsigneeDocument(**get_cnee)
+
+        return None
+
+    async def consignee_list_async(self, page_number: int = 1, page_size: int = 10) -> PagedResult[ConsigneeDocument]:
+        skip = (page_number - 1) * page_size
+        total_count = await self._consignee.count_documents({})
+
+        cursor = self._consignee.find({}).sort("CreatedDate", -1).skip(skip).limit(page_size)
+        items = []
+        async for document in cursor:
+            items.append(ConsigneeDocument(**document))
+
+        return PagedResult(
+            items=items,
+            total_count=total_count,
+            page_number=page_number,
+            page_size=page_size
+        )
+
+    async def get_list_consignee_async(self) -> Optional[List[ConsigneeDocument]]:
+        items = []
+        cursor = self._consignee.find({})
+        async for document in cursor:
+            items.append(ConsigneeDocument(**document))
+
+        if len(items) > 1:
+            return items
+        return None
+
     async def save_colour_async(self, colour: ColourDocument) -> ColourDocument:
         get_colour = await self._colour.find_one({"Name": colour.name})
 

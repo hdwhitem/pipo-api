@@ -9,6 +9,8 @@ from src.domain.collections.gmanufacturer import GManufacturer
 from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
 from src.infrastructure.persistence.documents.colour_document import ColourDocument
+from src.infrastructure.persistence.documents.consignee_document import ConsigneeDocument
+from src.domain.dtos.paged_result_dto import PagedResult
 from src.domain.dtos.register_dto import RegisterUserDto
 from src.domain.dtos.login_dto import LoginDto
 from src.infrastructure.persistence.documents.order_document import OrderDocument
@@ -28,6 +30,31 @@ class IMongoRepo(ABC):
     @abstractmethod
     async def delete_colour_async(self, Colour_id: str) -> Optional[ColourDocument]:
         """Contrato para eliminar un Colour por su ID"""
+        pass
+
+    @abstractmethod
+    async def save_consignee_async(self, consignee: ConsigneeDocument) -> ConsigneeDocument:
+        """Contrato para registrar un consignee"""
+        pass
+
+    @abstractmethod
+    async def update_consignee_async(self, consignee_id: str, consignee: ConsigneeDocument) -> Optional[ConsigneeDocument]:
+        """Contrato para actualizar un consignee"""
+        pass
+
+    @abstractmethod
+    async def delete_consignee_async(self, consignee_id: str) -> Optional[ConsigneeDocument]:
+        """Contrato para eliminar un consignee"""
+        pass
+
+    @abstractmethod
+    async def consignee_list_async(self, page_number: int = 1, page_size: int = 10) -> PagedResult[ConsigneeDocument]:
+        """Contrato para listar consignees paginados"""
+        pass
+
+    @abstractmethod
+    async def get_list_consignee_async(self) -> Optional[List[ConsigneeDocument]]:
+        """Contrato para obtener lista completa de consignees si hay más de uno"""
         pass
 
     @abstractmethod
