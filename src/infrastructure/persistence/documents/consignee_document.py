@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, EmailStr
 from src.domain.utils.py_object_id import PyObjectId
 
 class ConsigneeDocument(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="Id")
     name: str = Field(..., max_length=70, alias="Name")
     tax_id: str = Field(..., max_length=25, alias="TaxId")
     email: Optional[EmailStr] = Field(default=None, max_length=100, alias="Email")

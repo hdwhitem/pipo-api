@@ -55,6 +55,7 @@ async def proforma_invoice(
             packing_note=parameters.packing_note,
             consignee_id=parameters.consignee_id,
             supplier_id=parameters.supplier_id,
+            bank_id=parameters.bank_id,
             hscode_id=parameters.hscode_id,
             discount=parameters.discount,
             ocean_freight=parameters.ocean_freight,
@@ -78,7 +79,7 @@ async def proforma_invoice(
         if exporter is None:
             raise EntityNotFoundException("Exporter not found")
 
-        bank = await mongo_repo.get_bank_account_by_id(exporter.bank_id)
+        bank = await mongo_repo.get_bank_account_by_id(parameters.bank_id)
         if bank is None:
             raise EntityNotFoundException("Bank account not found")
 

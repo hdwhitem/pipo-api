@@ -16,6 +16,7 @@ class OrderRequestDto(BaseModel):
     packing_note: str = Field(..., alias="PackingNote")
     consignee_id: str = Field(..., alias="ConsigneeId")
     supplier_id: str = Field(..., alias="SupplierId")
+    bank_id: str = Field(..., alias="BankId")
     hscode_id: Optional[str] = Field(default=None, alias="HscodeId")
     discount: float = Field(default=0.0, alias="Discount")
     ocean_freight: float = Field(default=0.0, alias="OceanFreight")

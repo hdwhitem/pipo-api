@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 class Guser(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")
+    id: Optional[str] = Field(None, alias="Id")
     UserName: str
     UserLastName: str
     UserEmail: str

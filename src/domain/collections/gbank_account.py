@@ -4,7 +4,7 @@ from src.domain.utils.py_object_id import PyObjectId
 
 
 class GBankAccount(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="Id")
 
     beneficiary: str = Field(..., alias="Beneficiary")
     bank_name: str = Field(..., alias="BankName")

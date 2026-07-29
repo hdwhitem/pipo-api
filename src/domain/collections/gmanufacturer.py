@@ -4,7 +4,7 @@ from src.domain.utils.py_object_id import PyObjectId
 
 
 class GManufacturer(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="Id")
 
     name: str = Field(..., alias="Name")
     address: str = Field(..., alias="Address")

@@ -4,7 +4,7 @@ from typing import Optional, Annotated
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
 class Gcountry(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="Id")
     code: str = Field(..., validation_alias="Code")
     name: str = Field(..., validation_alias="Name")
     image: str = Field(..., validation_alias="Image")

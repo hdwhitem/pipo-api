@@ -4,7 +4,7 @@ from src.domain.models.order_slab import OrderSlab
 from src.domain.utils.py_object_id import PyObjectId
 
 class OrderDocument(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="Id")
     pi_number: Optional[int] = None
     currency: int
     country_destination: str
@@ -19,7 +19,7 @@ class OrderDocument(BaseModel):
     consignee_id: str
     supplier_id: str
     exporter_id: Optional[str] = None
-    bank_id: Optional[str] = None
+    bank_id: str
     hscode_id: Optional[str] = None
     discount: float = 0.0
     ocean_freight: float = 0.0

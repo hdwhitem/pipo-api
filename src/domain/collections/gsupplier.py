@@ -5,7 +5,7 @@ from src.domain.utils.py_object_id import PyObjectId
 
 class GSupplier(BaseModel):
     # Equivale a [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    id: Optional[PyObjectId] = Field(default=None, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="Id")
     
     supplier_id: str = Field(..., alias="SupplierId")
     name: str = Field(..., alias="Name")
