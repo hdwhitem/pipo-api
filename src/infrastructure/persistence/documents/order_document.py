@@ -5,25 +5,25 @@ from src.domain.utils.py_object_id import PyObjectId
 
 class OrderDocument(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="Id")
-    pi_number: Optional[int] = None
-    currency: int
-    country_destination: str
-    port_of_discharge: str
-    terms_and_payment: str
-    incoterms: Optional[str] = None
-    container20ft: int = 0
-    container40ft: int = 0
-    box_sticker: str
-    box_design: str
-    packing_note: str
-    consignee_id: str
-    supplier_id: str
-    exporter_id: Optional[str] = None
-    bank_id: str
-    hscode_id: Optional[str] = None
-    discount: float = 0.0
-    ocean_freight: float = 0.0
-    slab: List[OrderSlab] = Field(default_factory=list)
+    pi_number: Optional[int] = Field(default=None, alias="PiNumber")
+    currency: int = Field(..., alias="Currency")
+    country_destination: str = Field(..., alias="CountryDestination")
+    port_of_discharge: str = Field(..., alias="PortOfDischarge")
+    terms_and_payment: str = Field(..., alias="TermsAndPayment")
+    incoterms: Optional[str] = Field(default=None, alias="Incoterms")
+    container20ft: int = Field(default=0, alias="Container20ft")
+    container40ft: int = Field(default=0, alias="Container40ft")
+    box_sticker: str = Field(..., alias="BoxSticker")
+    box_design: str = Field(..., alias="BoxDesign")
+    packing_note: str = Field(..., alias="PackingNote")
+    consignee_id: str = Field(..., alias="ConsigneeId")
+    supplier_id: str = Field(..., alias="SupplierId")
+    exporter_id: Optional[str] = Field(default=None, alias="ExporterId")
+    bank_id: str = Field(..., alias="BankId")
+    hscode_id: Optional[str] = Field(default=None, alias="HscodeId")
+    discount: float = Field(default=0.0, alias="Discount")
+    ocean_freight: float = Field(default=0.0, alias="OceanFreight")
+    slab: List[OrderSlab] = Field(default_factory=list, alias="Slab")
 
     class Config:
         populate_by_name = True

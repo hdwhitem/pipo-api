@@ -5,9 +5,9 @@ PyObjectId = Annotated[str, BeforeValidator(str)]
 
 class Gcountry(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="Id")
-    code: str = Field(..., validation_alias="Code")
-    name: str = Field(..., validation_alias="Name")
-    image: str = Field(..., validation_alias="Image")
+    code: str = Field(..., alias="Code")
+    name: str = Field(..., alias="Name")
+    image: str = Field(..., alias="Image")
 
     class Config:
         populate_by_name = True
