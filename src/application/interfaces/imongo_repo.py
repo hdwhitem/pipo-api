@@ -9,6 +9,7 @@ from src.domain.collections.gmanufacturer import GManufacturer
 from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
 from src.domain.dtos.bank_item_dto import BankItemDto
+from src.domain.dtos.supplier_dtos import SupplierCreateUpdateDto, SupplierListItemDto
 from src.infrastructure.persistence.documents.colour_document import ColourDocument
 from src.infrastructure.persistence.documents.consignee_document import ConsigneeDocument
 from src.domain.dtos.paged_result_dto import PagedResult
@@ -141,5 +142,24 @@ class IMongoRepo(ABC):
     @abstractmethod
     async def get_banks_by_exporter_id_async(self, exporter_id: str) -> List[BankItemDto]:
         """Obtener los bancos que tenga el exporter"""
+        pass
+    @abstractmethod
+    async def get_supplier_list_async(self) -> List[SupplierListItemDto]:
+        """Lista supplier"""
+        pass
+
+    @abstractmethod
+    async def save_supplier_async(self, dto: SupplierCreateUpdateDto) -> GSupplier:
+        """Guardar supplier"""
+        pass
+
+    @abstractmethod
+    async def update_supplier_async(self, supplier_id: str, dto: SupplierCreateUpdateDto) -> Optional[GSupplier]:
+        """Actualizar supplier"""
+        pass
+
+    @abstractmethod
+    async def delete_supplier_async(self, supplier_id: str) -> Optional[GSupplier]:
+        """Elimina un supplier"""
         pass
 

@@ -16,6 +16,7 @@ from src.api.controllers.invitation_controller import router as invitation_route
 from src.api.controllers.colour_controller import router as colour_router
 from src.api.controllers.consignee_controller import router as consignee_router
 from src.api.controllers.exporter_controller import router as exporter_router
+from src.api.controllers.supplier_controller import router as supplier_router
 
 load_dotenv()
 
@@ -51,3 +52,4 @@ app.include_router(invitation_router)
 app.include_router(colour_router)
 app.include_router(consignee_router)
 app.include_router(exporter_router)
+app.include_router(supplier_router)

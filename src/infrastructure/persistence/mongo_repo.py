@@ -17,6 +17,7 @@ from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.guser import Guser
 from src.domain.collections.gproforma_number import GProformaNumber
 from src.domain.dtos.bank_item_dto import BankItemDto
+from src.domain.dtos.supplier_dtos import SupplierCreateUpdateDto, SupplierListItemDto
 from src.infrastructure.persistence.documents.order_document import OrderDocument
 from src.infrastructure.persistence.documents.colour_document import ColourDocument
 from src.infrastructure.persistence.documents.consignee_document import ConsigneeDocument
@@ -280,7 +281,6 @@ class MongoRepo(IMongoRepo):
         if existing_order is None:
             order_data = order.model_dump(by_alias=True, exclude_none=True)
             result = await self._order.insert_one(order_data, session=session)
-
             order.id = result.inserted_id
 
         return order
@@ -509,3 +509,80 @@ class MongoRepo(IMongoRepo):
             )
 
         return banks
+
+    async def get_supplier_list_async(self) -> List[SupplierListItemDto]:
+        """
+        Lista los suppliers devolviendo únicamente Name, SupplierId, ExporterId e Id.
+        """
+        suppliers: List[SupplierListItemDto] = []
+        
+        # Proyección optimizada para traer solo los campos requeridos
+        projection = {
+            "Name": 1,
+            "SupplierId": 1,
+            "ExporterId": 1
+        }
+        
+        cursor = self._supplier.find({}, projection).sort("Name", 1)
+        async for doc in cursor:
+            suppliers.append(
+                SupplierListItemDto(
+                    Id=str(doc["_id"]),
+                    Name=doc.get("Name", ""),
+                    SupplierId=doc.get("SupplierId", ""),
+                    ExporterId=doc.get("ExporterId")
+                )
+            )
+        return suppliers
+
+    async def save_supplier_async(self, dto: SupplierCreateUpdateDto) -> GSupplier:
+        """
+        Crea un nuevo documento de GSupplier en MongoDB.
+        """
+        supplier_data = dto.model_dump(by_alias=True, exclude_none=True)
+        result = await self._supplier.insert_one(supplier_data)
+        
+        # Leemos el documento recién creado para devolverlo mapeado al modelo GSupplier
+        created_doc = await self._supplier.find_one({"_id": result.inserted_id})
+        return GSupplier(**created_doc)
+
+    async def update_supplier_async(self, supplier_id: str, dto: SupplierCreateUpdateDto) -> Optional[GSupplier]:
+        """
+        Actualiza un GSupplier existente por su _id (o por su campo SupplierId si aplica).
+        Soporta búsqueda por ObjectId o por SupplierId exacto.
+        """
+        # Determina si el parámetro es un ObjectId de Mongo o una cadena personalizada
+        filter_query = {"_id": ObjectId(supplier_id)} if ObjectId.is_valid(supplier_id) else {"SupplierId": supplier_id}
+        
+        existing = await self._supplier.find_one(filter_query)
+        if not existing:
+            return None
+
+        update_data = dto.model_dump(by_alias=True, exclude_none=True)
+
+        result = await self._supplier.update_one(
+            {"_id": existing["_id"]},
+            {"$set": update_data}
+        )
+
+        if result.modified_count > 0 or result.matched_count > 0:
+            updated_doc = await self._supplier.find_one({"_id": existing["_id"]})
+            return GSupplier(**updated_doc)
+
+        return None
+
+    async def delete_supplier_async(self, supplier_id: str) -> Optional[GSupplier]:
+        """
+        Elimina un GSupplier por su _id u ObjectId de MongoDB.
+        """
+        filter_query = {"_id": ObjectId(supplier_id)} if ObjectId.is_valid(supplier_id) else {"SupplierId": supplier_id}
+        
+        existing = await self._supplier.find_one(filter_query)
+        if not existing:
+            return None
+
+        result = await self._supplier.delete_one({"_id": existing["_id"]})
+        if result.deleted_count > 0:
+            return GSupplier(**existing)
+
+        return None
