@@ -8,6 +8,7 @@ from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.gmanufacturer import GManufacturer
 from src.domain.collections.gpassword_reset import GPasswordReset
 from src.domain.collections.gsupplier import GSupplier
+from src.domain.dtos.bank_item_dto import BankItemDto
 from src.infrastructure.persistence.documents.colour_document import ColourDocument
 from src.infrastructure.persistence.documents.consignee_document import ConsigneeDocument
 from src.domain.dtos.paged_result_dto import PagedResult
@@ -135,5 +136,10 @@ class IMongoRepo(ABC):
     @abstractmethod
     async def update_user_password_by_email_async(self, email: str, new_hashed_password: str) -> bool:
         """Actualiza la contraseña de un usuario usando su email"""
+        pass
+
+    @abstractmethod
+    async def get_banks_by_exporter_id_async(self, exporter_id: str) -> List[BankItemDto]:
+        """Obtener los bancos que tenga el exporter"""
         pass
 

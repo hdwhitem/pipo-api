@@ -16,6 +16,7 @@ from src.domain.collections.gsupplier import GSupplier
 from src.domain.collections.ginvitation import GInvitation
 from src.domain.collections.guser import Guser
 from src.domain.collections.gproforma_number import GProformaNumber
+from src.domain.dtos.bank_item_dto import BankItemDto
 from src.infrastructure.persistence.documents.order_document import OrderDocument
 from src.infrastructure.persistence.documents.colour_document import ColourDocument
 from src.infrastructure.persistence.documents.consignee_document import ConsigneeDocument
@@ -465,3 +466,46 @@ class MongoRepo(IMongoRepo):
             {"$set": {"UserPassword": new_hashed_password}}
         )
         return result.modified_count > 0
+
+    async def get_banks_by_exporter_id_async(self, exporter_id: str) -> List[BankItemDto]:
+        # 1. Validar que el id sea un ObjectId válido para MongoDB
+        if not ObjectId.is_valid(exporter_id):
+            return []
+
+        # 2. Buscar el Exporter por su ObjectId usando la colección self._exporter
+        exporter = await self._exporter.find_one({"_id": ObjectId(exporter_id)})
+        if not exporter:
+            return []
+
+        # 3. Obtener el array de IDs de bancos 
+        bank_ids_raw = exporter.get("BankId")
+        if not bank_ids_raw:
+            return []
+
+        # 4. Convertir cadenas de texto válidas a ObjectId para la consulta $in
+        bank_object_ids = [
+            ObjectId(b_id) for b_id in bank_ids_raw if ObjectId.is_valid(b_id)
+        ]
+        if not bank_object_ids:
+            return []
+
+        # 5. Consultar la colección self._bank filtrando por el array $in 
+        # y proyectando únicamente los campos necesarios
+        projection = {
+            "BankName": 1,
+            "CurrencyAccount": 1
+        }
+        
+        cursor = self._bank.find({"_id": {"$in": bank_object_ids}}, projection)
+        
+        banks: List[BankItemDto] = []
+        async for doc in cursor:
+            banks.append(
+                BankItemDto(
+                    Id=str(doc["_id"]),
+                    BankName=doc.get("BankName", ""),
+                    CurrencyAccount=doc.get("CurrencyAccount", "")
+                )
+            )
+
+        return banks
