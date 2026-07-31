@@ -4,7 +4,11 @@ from src.domain.models.order_slab import OrderSlab
 from src.domain.utils.py_object_id import PyObjectId
 
 class OrderDocument(BaseModel):
-    id: Optional[PyObjectId] = Field(default=None, alias="Id")
+    id: Optional[PyObjectId] = Field(
+            default=None, 
+            validation_alias="_id", 
+            alias="Id" 
+        )
     pi_number: Optional[int] = Field(default=None, alias="PiNumber")
     currency: int = Field(..., alias="Currency")
     country_destination: str = Field(..., alias="CountryDestination")
