@@ -1,17 +1,20 @@
 from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, AliasChoices
 from src.domain.utils.py_object_id import PyObjectId
+
 
 class ConsigneeDocument(BaseModel):
     id: Optional[PyObjectId] = Field(
         default=None, 
-        validation_alias="_id", 
-        alias="Id" 
+        validation_alias=AliasChoices("_id", "id", "Id"),
+        serialization_alias="id"
     )
     name: str = Field(..., max_length=70, alias="Name")
     tax_id: str = Field(..., max_length=25, alias="TaxId")
+    
     email: Optional[EmailStr] = Field(default=None, max_length=100, alias="Email")
+    
     address: str = Field(..., max_length=80, alias="Address")
     post_code: str = Field(..., max_length=10, alias="PostCode")
     city: str = Field(..., max_length=40, alias="City")
@@ -22,6 +25,15 @@ class ConsigneeDocument(BaseModel):
     created_date: Optional[datetime] = Field(default=None, alias="CreatedDate")
     modified_date: Optional[datetime] = Field(default=None, alias="ModifiedDate")
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
+    @field_validator("email", mode="before")
+    @classmethod
+    def sanitize_email(cls, v: Optional[str]) -> Optional[str]:
+        # Si el valor no es un string, está vacío, o no tiene '@', lo fuerza a None
+        if not v or not isinstance(v, str) or "@" not in v:
+            return None
+        return v.strip()
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True
+    )
