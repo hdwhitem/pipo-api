@@ -27,6 +27,7 @@ class ConsigneeDocument(BaseModel):
 
     @field_validator("email", mode="before")
     @classmethod
+    
     def sanitize_email(cls, v: Optional[str]) -> Optional[str]:
         # Si el valor no es un string, está vacío, o no tiene '@', lo fuerza a None
         if not v or not isinstance(v, str) or "@" not in v:
